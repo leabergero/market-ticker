@@ -28,6 +28,13 @@ El banner queda configurado para iniciarse solo al encender la
 computadora. Si no lo querés, se desactiva en ⚙ → destildar
 "Iniciar automáticamente con el sistema".
 
+DESINSTALAR
+-----------
+- Windows: doble click en  uninstall.bat  (pide confirmación)
+- macOS:   bash uninstall.sh              (pide confirmación)
+Cierra la app, quita el inicio automático y el acceso directo,
+y borra la carpeta completa con sus datos.
+
 USO
 ---
 - La cinta muestra las cotizaciones (verde sube / rojo baja).
