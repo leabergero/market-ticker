@@ -11,14 +11,22 @@ REQUISITO ÚNICO: Python 3.10 o superior
 WINDOWS
 -------
 1. Descomprimir el zip en cualquier carpeta (p. ej. Documentos\MarketTicker)
-2. Doble click en  install.bat   (una sola vez; descarga las dependencias)
-3. Doble click en  run.bat       (inicia el banner)
+2. Doble click en  install.bat  — instala, crea "Market Ticker" en el
+   menú inicio y arranca el banner automáticamente.
+   Las próximas veces: menú inicio → Market Ticker (o run.bat).
 
 MACOS
 -----
 1. Descomprimir el zip
-2. Abrir Terminal en la carpeta y ejecutar:   bash install.sh
-3. Iniciar con:                               ./run.sh
+2. Abrir Terminal en la carpeta y ejecutar:  bash install.sh
+   — instala y arranca el banner automáticamente.
+   Las próximas veces: ./run.sh
+
+INICIO AUTOMÁTICO
+-----------------
+El banner queda configurado para iniciarse solo al encender la
+computadora. Si no lo querés, se desactiva en ⚙ → destildar
+"Iniciar automáticamente con el sistema".
 
 USO
 ---

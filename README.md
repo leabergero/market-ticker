@@ -19,9 +19,11 @@ Banner de cotizaciones en tiempo real, estilo cinta de bolsa: fino (32 px), sin 
 
 Descargá el zip de tu sistema desde [Releases](../../releases), descomprimí y:
 
-- **Windows**: doble click en `install.bat` (una vez) → `run.bat`
-- **macOS**: `bash install.sh` (una vez) → `./run.sh`
+- **Windows**: doble click en `install.bat` — instala, crea "Market Ticker" en el menú inicio y arranca solo
+- **macOS**: `bash install.sh` — instala y arranca solo
 - **Linux**: `bash installers/build_linux.sh` → `dist/run.sh`
+
+El inicio automático con el sistema queda **activado por defecto** (se desactiva en ⚙).
 
 Único requisito: [Python 3.10+](https://www.python.org/downloads/) (en Windows, marcar "Add Python to PATH").
 

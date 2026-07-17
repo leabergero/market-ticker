@@ -315,6 +315,14 @@ class TickerBanner(QWidget):
         QApplication.primaryScreen().availableGeometryChanged.connect(
             lambda _: self._place())
 
+        # Autostart viene activado por defecto: registrarlo en el SO en el
+        # primer arranque (el usuario lo desactiva desde ⚙ si no lo quiere).
+        if self.config.get("autostart") and not self._autostart_enabled():
+            try:
+                self._set_autostart(True)
+            except Exception:
+                pass
+
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.fetch_tickers)
         self.refresh_timer.start(60 * 1000)  # consulta al backend cada 1 min
@@ -325,7 +333,7 @@ class TickerBanner(QWidget):
     def _load_config(self):
         """Carga config.json normalizando valores de versiones anteriores."""
         default = {"position": "top", "markets": [], "price_range": 0,
-                   "reserve_space": True, "lang": "es", "autostart": False}
+                   "reserve_space": True, "lang": "es", "autostart": True}
         try:
             with open(self.config_path) as f:
                 cfg = {**default, **json.load(f)}
@@ -348,7 +356,7 @@ class TickerBanner(QWidget):
         cfg["reserve_space"] = bool(cfg.get("reserve_space", True))
         if cfg.get("lang") not in I18N:
             cfg["lang"] = "es"
-        cfg["autostart"] = bool(cfg.get("autostart", False))
+        cfg["autostart"] = bool(cfg.get("autostart", True))
         global _lang
         _lang = cfg["lang"]
         return {k: cfg[k] for k in default}
@@ -851,7 +859,15 @@ class TickerBanner(QWidget):
         el intérprete actual con este main.py.
         """
         app_dir = Path(sys.argv[0]).resolve().parent
-        script = app_dir / ("run.bat" if sys.platform == "win32" else "run.sh")
+        if sys.platform == "win32":
+            # launcher.pyw + pythonw = sin ventanas de consola al iniciar sesión
+            pyw = app_dir / "venv" / "Scripts" / "pythonw.exe"
+            launcher = app_dir / "launcher.pyw"
+            if pyw.exists() and launcher.exists():
+                return f'"{pyw}" "{launcher}"'
+            script = app_dir / "run.bat"
+        else:
+            script = app_dir / "run.sh"
         if script.exists():
             return str(script)
         return f'"{sys.executable}" "{Path(sys.argv[0]).resolve()}"'
