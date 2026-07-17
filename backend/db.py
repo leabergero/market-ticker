@@ -7,10 +7,12 @@ class TickerDB:
     """Gestiona SQLite local con rotación diaria de backups."""
 
     def __init__(self, db_dir=None):
-        # Ruta absoluta junto a este archivo: evita crear BDs distintas
-        # según desde dónde se lance el proceso.
+        # TICKER_DATA_DIR permite datos por-usuario cuando la app está
+        # instalada en una ruta de solo-lectura (/opt en el .deb).
+        # Sin la variable: ruta absoluta junto a este archivo (evita crear
+        # BDs distintas según desde dónde se lance el proceso).
         if db_dir is None:
-            db_dir = Path(__file__).resolve().parent / "data"
+            db_dir = os.environ.get("TICKER_DATA_DIR") or Path(__file__).resolve().parent / "data"
         self.db_dir = Path(db_dir)
         self.db_dir.mkdir(exist_ok=True)
         self.db_path = self.db_dir / "ticker.db"
