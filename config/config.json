@@ -1,0 +1,8 @@
+{
+  "position": "top",
+  "window_width": 800,
+  "window_height": 600,
+  "price_min": 0,
+  "price_max": 500,
+  "market": "all"
+}

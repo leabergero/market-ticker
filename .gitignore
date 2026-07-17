@@ -1,0 +1,34 @@
+# Venv
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Data
+data/
+data/*.db
+data/backups/
+
+# Paquetes generados (los zips van como GitHub Release)
+release/windows/
+release/macos/
+release/*.zip
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

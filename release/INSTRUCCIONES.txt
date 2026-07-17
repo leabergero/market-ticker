@@ -1,0 +1,43 @@
+MARKET TICKER — Instrucciones de instalación
+=============================================
+
+Banner de cotizaciones en tiempo real (19 mercados mundiales, noticias,
+3 idiomas). Actualiza precios cada 15 minutos vía Yahoo Finance.
+
+REQUISITO ÚNICO: Python 3.10 o superior
+  - Windows/macOS: https://www.python.org/downloads/
+  - En Windows, marcar "Add Python to PATH" al instalar.
+
+WINDOWS
+-------
+1. Descomprimir el zip en cualquier carpeta (p. ej. Documentos\MarketTicker)
+2. Doble click en  install.bat   (una sola vez; descarga las dependencias)
+3. Doble click en  run.bat       (inicia el banner)
+
+MACOS
+-----
+1. Descomprimir el zip
+2. Abrir Terminal en la carpeta y ejecutar:   bash install.sh
+3. Iniciar con:                               ./run.sh
+
+USO
+---
+- La cinta muestra las cotizaciones (verde sube / rojo baja).
+- LED izquierdo: verde = datos en vivo; rojo = sin conexión.
+- Click en una cotización → noticias de las últimas 72 h hábiles.
+- ⚙ (derecha): idioma (ES/EN/DE), mercados, posición arriba/abajo,
+  "siempre visible" e inicio automático con el sistema.
+- Click derecho sobre la cinta: menú completo (filtros de precio, backups…).
+- ✕ cierra el banner.
+
+NOTAS POR SISTEMA
+-----------------
+- Windows: "siempre visible" usa la API AppBar (como la barra de tareas).
+  Es la primera prueba en Windows — avisar cualquier detalle raro.
+- macOS: el banner queda siempre a la vista, pero macOS no permite que
+  las apps reserven espacio de pantalla: una ventana maximizada puede
+  extenderse por debajo del banner. Limitación de Apple, no de la app.
+
+Autor: Leandro R. Bergero — MSc Finance & Banking (BSM-UPF)
+GitHub: https://github.com/leabergero
+LinkedIn: https://www.linkedin.com/in/leandro-raul-bergero/
