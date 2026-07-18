@@ -3,6 +3,14 @@
 Todas las novedades relevantes de cada versión. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/); versionado SemVer.
 
+## Sin publicar
+
+### Agregado
+- **Grosor del banner configurable** (⚙ → "Grosor del banner", 20–64 px,
+  default 32): en Windows el banner se sentía más invasivo que en Linux;
+  ahora cada quien elige el alto de la franja. La reserva de espacio
+  (strut/AppBar) y el posicionado siguen el valor elegido.
+
 ## v0.3.2 — 2026-07-18
 
 ### Agregado

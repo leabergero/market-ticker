@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel,
     QPushButton, QDialog, QListWidget, QListWidgetItem, QMessageBox, QMenu,
-    QCheckBox, QComboBox, QProgressDialog, QLineEdit
+    QCheckBox, QComboBox, QProgressDialog, QLineEdit, QSpinBox
 )
 from datetime import datetime, timedelta
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint, QPointF
@@ -136,6 +136,7 @@ I18N = {
         "custom_added": "{s} agregado a la cinta.",
         "my_tickers": "Mis tickers",
         "menu_tip": "Menú",
+        "height_label": "Grosor del banner:",
     },
     "en": {
         "waiting": "waiting for data…",
@@ -193,6 +194,7 @@ I18N = {
         "custom_added": "{s} added to the tape.",
         "my_tickers": "My tickers",
         "menu_tip": "Menu",
+        "height_label": "Banner thickness:",
     },
     "de": {
         "waiting": "warte auf Daten…",
@@ -250,6 +252,7 @@ I18N = {
         "custom_added": "{s} zum Band hinzugefügt.",
         "my_tickers": "Meine Ticker",
         "menu_tip": "Menü",
+        "height_label": "Bannerhöhe:",
     },
 }
 
@@ -539,7 +542,12 @@ class HistoryChart(QWidget):
 class TickerBanner(QWidget):
     """Banner de cotizaciones: fino, sin marco, ancho completo de pantalla."""
 
-    HEIGHT = 32
+    @property
+    def HEIGHT(self):
+        """Grosor del banner en px, configurable desde ⚙ (en Windows el
+        default de 32 se sentía invasivo; cada quien elige). Lo leen
+        también la reserva de espacio (strut/AppBar) y el posicionado."""
+        return self.config.get("banner_height", 32)
 
     # Señales para volver del hilo de red al hilo de la interfaz (Qt las
     # encola automáticamente cuando se emiten desde otro hilo)
@@ -604,7 +612,8 @@ class TickerBanner(QWidget):
         """Carga config.json normalizando valores de versiones anteriores."""
         default = {"position": "top", "markets": [], "price_range": 0,
                    "pct_range": 0, "reserve_space": True, "lang": "es",
-                   "autostart": True, "declined_update": ""}
+                   "autostart": True, "declined_update": "",
+                   "banner_height": 32}
         try:
             with open(self.config_path) as f:
                 cfg = {**default, **json.load(f)}
@@ -631,6 +640,8 @@ class TickerBanner(QWidget):
             cfg["lang"] = "es"
         cfg["autostart"] = bool(cfg.get("autostart", True))
         cfg["declined_update"] = str(cfg.get("declined_update") or "")
+        h = cfg.get("banner_height")
+        cfg["banner_height"] = h if isinstance(h, int) and 20 <= h <= 64 else 32
         global _lang
         _lang = cfg["lang"]
         return {k: cfg[k] for k in default}
@@ -1136,6 +1147,16 @@ class TickerBanner(QWidget):
         pos_row.addStretch()
         lay.addLayout(pos_row)
 
+        h_row = QHBoxLayout()
+        h_row.addWidget(QLabel(tr("height_label")))
+        h_spin = QSpinBox()
+        h_spin.setRange(20, 64)
+        h_spin.setSuffix(" px")
+        h_spin.setValue(self.config.get("banner_height", 32))
+        h_row.addWidget(h_spin)
+        h_row.addStretch()
+        lay.addLayout(h_row)
+
         reserve_cb = QCheckBox(tr("reserve_label"))
         reserve_cb.setChecked(self.config.get("reserve_space", True))
         lay.addWidget(reserve_cb)
@@ -1167,6 +1188,7 @@ class TickerBanner(QWidget):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             self.config["markets"] = [m for m, cb in boxes.items() if cb.isChecked()]
             self.config["position"] = "bottom" if pos_combo.currentIndex() == 1 else "top"
+            self.config["banner_height"] = h_spin.value()
             self.config["reserve_space"] = reserve_cb.isChecked()
             self.config["autostart"] = autostart_cb.isChecked()
             self._set_autostart(autostart_cb.isChecked())
