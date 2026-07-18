@@ -36,3 +36,13 @@ Thumbs.db
 # Paquete deb generado
 release/*.deb
 release/deb-build/
+
+# Instaladores nativos generados (van como assets del GitHub Release)
+release/*.msi
+release/*.pkg
+release/msi-build/
+release/pkg-build/
+
+# Capturas de pruebas locales
+*.jpeg
+*.jpg

@@ -45,9 +45,15 @@ class TickerScraper:
                 # 5 días para tener el cierre anterior (con 1d el cambio da 0)
                 data = ticker.history(period="5d")
 
-                if not data.empty:
-                    latest_close = float(data['Close'].iloc[-1])
-                    prev_close = float(data['Close'].iloc[-2]) if len(data) >= 2 else latest_close
+                # Con el mercado cerrado Yahoo incluye una vela del día en
+                # curso con Close NaN: descartarla y usar los últimos cierres
+                # reales, así fuera de horario se muestra el movimiento del
+                # día anterior. (NaN además se vuelve NULL en SQLite y viola
+                # el NOT NULL de price.)
+                closes = data['Close'].dropna() if not data.empty else []
+                if len(closes) > 0:
+                    latest_close = float(closes.iloc[-1])
+                    prev_close = float(closes.iloc[-2]) if len(closes) >= 2 else latest_close
                     change = latest_close - prev_close
                     change_pct = (change / prev_close * 100) if prev_close != 0 else 0
 
@@ -71,6 +77,45 @@ class TickerScraper:
             prices = TickerScraper.fetch_prices(symbols, market)
             all_prices.extend(prices)
         return all_prices
+
+    @staticmethod
+    def search(query, limit=10):
+        """Busca símbolos en Yahoo Finance (para los tickers personalizados
+        del usuario): [{symbol, name, exchange}]."""
+        try:
+            quotes = yf.Search(query, max_results=limit).quotes or []
+        except Exception as e:
+            logger.warning(f"Search error '{query}': {e}")
+            return []
+        results = []
+        for q in quotes:
+            sym = q.get("symbol")
+            if sym:
+                results.append({
+                    "symbol": sym,
+                    "name": q.get("shortname") or q.get("longname") or sym,
+                    "exchange": q.get("exchDisp") or q.get("exchange") or "",
+                })
+        return results
+
+    @staticmethod
+    def fetch_history(symbol, interval="15m"):
+        """Curva intradía de la última sesión (velas de 15 min).
+
+        Con el mercado cerrado, yfinance con period=1d ya devuelve la sesión
+        del último día hábil completa — el fallback viene gratis. dropna por
+        el mismo gotcha de velas NaN fuera de horario que fetch_prices.
+        """
+        try:
+            data = yf.Ticker(symbol).history(period="1d", interval=interval)
+            closes = data["Close"].dropna() if not data.empty else []
+            if len(closes) == 0:
+                return []
+            return [{"t": ts.isoformat(), "p": round(float(v), 2)}
+                    for ts, v in closes.items()]
+        except Exception as e:
+            logger.warning(f"Error fetching history for {symbol}: {e}")
+            return []
 
     @staticmethod
     def news_cutoff(business_hours=72):

@@ -8,19 +8,28 @@ REQUISITO ÚNICO: Python 3.10 o superior
   - Windows/macOS: https://www.python.org/downloads/
   - En Windows, marcar "Add Python to PATH" al instalar.
 
-WINDOWS
+WINDOWS  (instalador recomendado: market-ticker-0.1.0.msi)
 -------
-1. Descomprimir el zip en cualquier carpeta (p. ej. Documentos\MarketTicker)
-2. Doble click en  install.bat  — instala, crea "Market Ticker" en el
-   menú inicio y arranca el banner automáticamente.
-   Las próximas veces: menú inicio → Market Ticker (o run.bat).
+1. Doble click en  market-ticker-0.1.0.msi  y seguir el asistente
+   (instala solo para tu usuario, sin pedir administrador).
+2. Menú inicio → Market Ticker. La PRIMERA vez se abre una consola
+   que instala las dependencias (necesita internet); después arranca
+   directo y sin consolas.
+   (Alternativa avanzada: el zip con install.bat sigue disponible.)
 
-MACOS
+MACOS  (instalador recomendado: market-ticker-0.1.0.pkg)
 -----
-1. Descomprimir el zip
-2. Abrir Terminal en la carpeta y ejecutar:  bash install.sh
-   — instala y arranca el banner automáticamente.
-   Las próximas veces: ./run.sh
+1. Doble click en  market-ticker-0.1.0.pkg  y seguir el asistente.
+   Si macOS lo bloquea ("desarrollador no identificado"):
+   click derecho → Abrir → Abrir.
+2. Launchpad → Market Ticker. La PRIMERA vez instala las dependencias
+   (necesita internet); después arranca directo.
+   (Alternativa avanzada: el zip con install.sh sigue disponible.)
+
+UBUNTU / DEBIAN
+---------------
+sudo apt install ./market-ticker_0.1.0_all.deb
+Menú de aplicaciones → Market Ticker.
 
 INICIO AUTOMÁTICO
 -----------------
@@ -30,10 +39,11 @@ computadora. Si no lo querés, se desactiva en ⚙ → destildar
 
 DESINSTALAR
 -----------
-- Windows: doble click en  uninstall.bat  (pide confirmación)
-- macOS:   bash uninstall.sh              (pide confirmación)
-Cierra la app, quita el inicio automático y el acceso directo,
-y borra la carpeta completa con sus datos.
+- Windows: Configuración → Aplicaciones → Market Ticker → Desinstalar.
+  (Si instalaste con el zip: doble click en uninstall.bat.)
+- macOS: bash "/Applications/Market Ticker.app/Contents/Resources/uninstall.sh"
+  (Si instalaste con el zip: bash uninstall.sh.)
+- Ubuntu/Debian: sudo apt remove market-ticker
 
 USO
 ---

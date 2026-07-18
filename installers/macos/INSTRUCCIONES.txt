@@ -1,0 +1,29 @@
+MARKET TICKER — macOS
+=====================
+
+INSTALAR
+--------
+1) Doble click en market-ticker-0.1.0.pkg y seguir el asistente.
+   Si macOS lo bloquea por "desarrollador no identificado":
+   click derecho sobre el .pkg → Abrir → Abrir
+   (o Ajustes del Sistema → Privacidad y seguridad → "Abrir igualmente").
+2) Abrir "Market Ticker" desde Launchpad o /Applications.
+   La PRIMERA vez instala las dependencias (necesita internet y
+   Python 3.10+; si falta Python se abre la página de descarga).
+3) Las siguientes veces arranca directo.
+
+El inicio automático al iniciar sesión queda activado por defecto;
+se cambia desde el engranaje ⚙ del banner.
+
+NOTA: macOS no ofrece API pública para reservar espacio de pantalla,
+así que el banner se superpone a las ventanas maximizadas.
+
+DESINSTALAR
+-----------
+bash "/Applications/Market Ticker.app/Contents/Resources/uninstall.sh"
+(o arrastrar Market Ticker.app a la Papelera y borrar
+ ~/Library/Application Support/Market Ticker)
+
+—
+Market Ticker · Leandro R. Bergero · MSc Finance & Banking (BSM-UPF)
+github.com/leabergero · linkedin.com/in/leandro-raul-bergero

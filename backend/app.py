@@ -5,6 +5,16 @@ from scraper import TickerScraper
 from datetime import datetime
 import logging
 import os
+import sys
+
+# Bajo pythonw.exe (Windows sin consola) stdout/stderr son None y Flask/click
+# crashean al imprimir el banner de arranque. Redirigir a un log ANTES de
+# configurar logging (basicConfig captura sys.stderr en ese momento).
+if sys.stdout is None or sys.stderr is None:
+    _log_dir = os.environ.get("TICKER_DATA_DIR") or os.path.dirname(os.path.abspath(__file__))
+    _log_file = open(os.path.join(_log_dir, "ticker.log"), "a", buffering=1, encoding="utf-8")
+    sys.stdout = sys.stdout or _log_file
+    sys.stderr = sys.stderr or _log_file
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -14,20 +24,38 @@ db = TickerDB()
 scheduler = BackgroundScheduler()
 
 # Estado del último scraping: el frontend lo usa para el LED verde/rojo.
-last_scrape = {"ok": False, "time": None, "count": 0}
+# "error" lleva la causa del último fallo para mostrarla en el banner
+# (sin esto, "esperando datos…" era indistinguible de un backend roto).
+last_scrape = {"ok": False, "time": None, "count": 0, "error": None}
 
 def scheduled_scrape():
     """Ejecuta scraping cada 15 minutos y registra si obtuvo datos en vivo."""
     try:
         prices = TickerScraper.fetch_all_markets()
+        custom = [c["symbol"] for c in db.get_custom_tickers()]
+        if custom:
+            prices += TickerScraper.fetch_prices(custom, "CUSTOM")
+        saved = 0
+        first_err = None
         for price_data in prices:
-            db.insert_ticker(**price_data)
-        last_scrape.update(ok=len(prices) > 0,
+            try:
+                db.insert_ticker(**price_data)
+                saved += 1
+            except Exception as e:
+                # una fila mala (p. ej. NaN→NULL) no debe abortar el resto
+                if first_err is None:
+                    first_err = f"{price_data.get('symbol')}: {e}"
+                logger.warning(f"Insert error {price_data.get('symbol')}: {e}")
+        error = None
+        if saved == 0:
+            error = first_err or "yfinance no devolvió datos (¿sin internet o Yahoo inaccesible?)"
+        last_scrape.update(ok=saved > 0,
                            time=datetime.now().isoformat(),
-                           count=len(prices))
-        logger.info(f"Scraped {len(prices)} tickers at {datetime.now()}")
+                           count=saved, error=error)
+        logger.info(f"Scraped {saved} tickers at {datetime.now()}")
     except Exception as e:
-        last_scrape.update(ok=False, time=datetime.now().isoformat(), count=0)
+        last_scrape.update(ok=False, time=datetime.now().isoformat(), count=0,
+                           error=f"{type(e).__name__}: {e}")
         logger.error(f"Scraping error: {e}")
 
 def daily_rotation():
@@ -45,10 +73,57 @@ def get_tickers():
     markets = [m.strip() for m in market.split(",") if m.strip()] if market else None
     price_min = request.args.get('price_min', type=float)
     price_max = request.args.get('price_max', type=float)
+    change_min = request.args.get('change_min', type=float)
+    change_max = request.args.get('change_max', type=float)
     limit = request.args.get('limit', 50, type=int)
 
-    tickers = db.get_tickers(markets=markets, price_min=price_min, price_max=price_max, limit=limit)
+    tickers = db.get_tickers(markets=markets, price_min=price_min, price_max=price_max,
+                             change_min=change_min, change_max=change_max, limit=limit)
     return jsonify({"tickers": tickers})
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Curva intradía (15 min) de la última sesión del símbolo, para el
+    gráfico del diálogo de noticias."""
+    symbol = request.args.get('symbol')
+    points = TickerScraper.fetch_history(symbol) if symbol else []
+    return jsonify({"symbol": symbol, "points": points})
+
+@app.route('/api/search', methods=['GET'])
+def search_symbols():
+    """Busca símbolos en Yahoo (buscador de tickers personalizados)."""
+    q = request.args.get('q', '').strip()
+    return jsonify({"results": TickerScraper.search(q) if q else []})
+
+@app.route('/api/custom', methods=['GET'])
+def get_custom():
+    """Lista de tickers personalizados del usuario."""
+    return jsonify({"tickers": db.get_custom_tickers()})
+
+@app.route('/api/custom', methods=['POST'])
+def add_custom():
+    """Agrega un ticker personalizado. Se valida contra Yahoo (si no hay
+    datos se rechaza) y su cotización queda insertada al instante para que
+    aparezca en la cinta sin esperar al próximo scrape."""
+    data = request.json or {}
+    symbol = (data.get('symbol') or '').strip().upper()
+    name = (data.get('name') or '').strip()
+    if not symbol:
+        return jsonify({"ok": False, "error": "symbol requerido"}), 400
+    prices = TickerScraper.fetch_prices([symbol], "CUSTOM")
+    if not prices:
+        return jsonify({"ok": False,
+                        "error": f"Yahoo no tiene datos para {symbol}"}), 404
+    db.add_custom_ticker(symbol, name)
+    for p in prices:
+        db.insert_ticker(**p)
+    return jsonify({"ok": True, "symbol": symbol})
+
+@app.route('/api/custom/<symbol>', methods=['DELETE'])
+def delete_custom(symbol):
+    """Quita un ticker personalizado (y sus cotizaciones de la cinta)."""
+    db.remove_custom_ticker(symbol.strip().upper())
+    return jsonify({"ok": True})
 
 @app.route('/api/news', methods=['GET'])
 def get_news():

@@ -1,8 +1,10 @@
 {
   "position": "top",
-  "window_width": 800,
-  "window_height": 600,
-  "price_min": 0,
-  "price_max": 500,
-  "market": "all"
+  "markets": [],
+  "price_range": 0,
+  "pct_range": 0,
+  "reserve_space": true,
+  "lang": "es",
+  "autostart": true,
+  "declined_update": ""
 }

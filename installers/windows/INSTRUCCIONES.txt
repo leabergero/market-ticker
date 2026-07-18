@@ -1,0 +1,26 @@
+MARKET TICKER — Windows
+=======================
+
+INSTALAR
+--------
+1) Doble click en market-ticker-X.Y.Z.msi y seguir el asistente.
+   (Se instala solo para tu usuario; no pide administrador.)
+2) Al terminar la instalación se abre sola una consola que instala
+   las dependencias y lanza el banner (necesita internet y Python
+   3.10+; si falta Python, se abre la página de descarga: marcar
+   "Add python.exe to PATH" al instalarlo).
+3) Las siguientes veces "Market Ticker" (menú inicio o inicio
+   automático) arranca directo, sin consolas.
+
+El inicio automático con Windows queda activado por defecto;
+se cambia desde el engranaje ⚙ del banner.
+
+DESINSTALAR
+-----------
+Configuración → Aplicaciones → Market Ticker → Desinstalar.
+(La carpeta venv de dependencias puede quedar en
+ %LocalAppData%\Programs\Market Ticker; se puede borrar a mano.)
+
+—
+Market Ticker · Leandro R. Bergero · MSc Finance & Banking (BSM-UPF)
+github.com/leabergero · linkedin.com/in/leandro-raul-bergero

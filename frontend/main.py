@@ -2,19 +2,28 @@ import sys
 import re
 import json
 import subprocess
+import tempfile
+import threading
 import webbrowser
 import requests
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QHBoxLayout, QVBoxLayout, QGridLayout, QLabel,
     QPushButton, QDialog, QListWidget, QListWidgetItem, QMessageBox, QMenu,
-    QCheckBox, QComboBox
+    QCheckBox, QComboBox, QProgressDialog, QLineEdit
 )
 from datetime import datetime, timedelta
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont, QColor, QPainter, QAction, QFontMetrics
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QPoint, QPointF
+from PyQt6.QtGui import (QFont, QColor, QPainter, QAction, QFontMetrics,
+                         QPen, QPolygonF, QIcon)
 
 BACKEND_URL = "http://127.0.0.1:5003"
+
+# Versión de la app: fuente ÚNICA de verdad (los build scripts la leen de acá)
+APP_VERSION = "0.3.2"
+# Releases de GitHub contra los que se chequean actualizaciones
+UPDATE_REPO = "leabergero/market-ticker"
+UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
 
 # Paleta HUD oscura
 BG = QColor("#0a0e14")
@@ -99,6 +108,34 @@ I18N = {
         "confirm_del": "¿Borrar TODOS los backups? No se puede deshacer.",
         "error": "Error",
         "autostart": "Iniciar automáticamente con el sistema",
+        "update_title": "Actualización",
+        "update_available": "Nueva versión {v} disponible — click para actualizar",
+        "update_ask": "Hay una versión nueva de Market Ticker (v{v}).\n¿Actualizar ahora? La app se cerrará, se instalará la versión nueva y volverá a abrirse.",
+        "update_now": "Actualizar ahora",
+        "update_later": "Más tarde",
+        "update_btn": "Actualizar a v{v}…",
+        "update_check": "Buscar actualizaciones",
+        "update_none": "Ya estás en la última versión (v{v}).",
+        "update_no_asset": "El último release no incluye instalador para este sistema.",
+        "update_err_check": "No se pudo consultar las actualizaciones. Probá más tarde.",
+        "update_downloading": "Descargando la actualización…",
+        "update_err_download": "Falló la descarga de la actualización.",
+        "chart_label": "Evolución del precio — {d}",
+        "chart_none": "Sin datos intradía para {s}.",
+        "no_backend": "sin conexión con el backend — reiniciá la app o revisá ticker.log",
+        "waiting_err": "sin datos del mercado — {e}",
+        "change_range": "Variación diaria", "all_changes": "Todas las variaciones",
+        "custom_tickers": "Tickers personalizados…",
+        "custom_title": "Tickers personalizados",
+        "custom_search_ph": "Buscar símbolo o compañía (p. ej. METR, Metrogas)…",
+        "search": "Buscar",
+        "custom_add": "Agregar seleccionado",
+        "custom_remove": "Quitar seleccionado",
+        "custom_mine": "Mis tickers (siempre en la cinta):",
+        "custom_add_raw": "Agregar \"{s}\" tal cual (se valida contra Yahoo)",
+        "custom_added": "{s} agregado a la cinta.",
+        "my_tickers": "Mis tickers",
+        "menu_tip": "Menú",
     },
     "en": {
         "waiting": "waiting for data…",
@@ -128,6 +165,34 @@ I18N = {
         "confirm_del": "Delete ALL backups? This cannot be undone.",
         "error": "Error",
         "autostart": "Start automatically at login",
+        "update_title": "Update",
+        "update_available": "New version {v} available — click to update",
+        "update_ask": "A new version of Market Ticker is available (v{v}).\nUpdate now? The app will close, install the new version and reopen.",
+        "update_now": "Update now",
+        "update_later": "Later",
+        "update_btn": "Update to v{v}…",
+        "update_check": "Check for updates",
+        "update_none": "You are already on the latest version (v{v}).",
+        "update_no_asset": "The latest release has no installer for this system.",
+        "update_err_check": "Could not check for updates. Try again later.",
+        "update_downloading": "Downloading update…",
+        "update_err_download": "The update download failed.",
+        "chart_label": "Price evolution — {d}",
+        "chart_none": "No intraday data for {s}.",
+        "no_backend": "no connection to the backend — restart the app or check ticker.log",
+        "waiting_err": "no market data — {e}",
+        "change_range": "Daily change", "all_changes": "All changes",
+        "custom_tickers": "Custom tickers…",
+        "custom_title": "Custom tickers",
+        "custom_search_ph": "Search symbol or company (e.g. METR)…",
+        "search": "Search",
+        "custom_add": "Add selected",
+        "custom_remove": "Remove selected",
+        "custom_mine": "My tickers (always on the tape):",
+        "custom_add_raw": "Add \"{s}\" as typed (validated against Yahoo)",
+        "custom_added": "{s} added to the tape.",
+        "my_tickers": "My tickers",
+        "menu_tip": "Menu",
     },
     "de": {
         "waiting": "warte auf Daten…",
@@ -157,6 +222,34 @@ I18N = {
         "confirm_del": "ALLE Backups löschen? Das kann nicht rückgängig gemacht werden.",
         "error": "Fehler",
         "autostart": "Automatisch beim Anmelden starten",
+        "update_title": "Aktualisierung",
+        "update_available": "Neue Version {v} verfügbar — zum Aktualisieren klicken",
+        "update_ask": "Eine neue Version von Market Ticker ist verfügbar (v{v}).\nJetzt aktualisieren? Die App wird geschlossen, die neue Version installiert und wieder geöffnet.",
+        "update_now": "Jetzt aktualisieren",
+        "update_later": "Später",
+        "update_btn": "Auf v{v} aktualisieren…",
+        "update_check": "Nach Updates suchen",
+        "update_none": "Sie verwenden bereits die neueste Version (v{v}).",
+        "update_no_asset": "Das letzte Release enthält kein Installationspaket für dieses System.",
+        "update_err_check": "Updates konnten nicht abgefragt werden. Versuchen Sie es später erneut.",
+        "update_downloading": "Update wird heruntergeladen…",
+        "update_err_download": "Der Download des Updates ist fehlgeschlagen.",
+        "chart_label": "Kursverlauf — {d}",
+        "chart_none": "Keine Intraday-Daten für {s}.",
+        "no_backend": "keine Verbindung zum Backend — App neu starten oder ticker.log prüfen",
+        "waiting_err": "keine Marktdaten — {e}",
+        "change_range": "Tagesveränderung", "all_changes": "Alle Veränderungen",
+        "custom_tickers": "Eigene Ticker…",
+        "custom_title": "Eigene Ticker",
+        "custom_search_ph": "Symbol oder Unternehmen suchen (z. B. METR)…",
+        "search": "Suchen",
+        "custom_add": "Auswahl hinzufügen",
+        "custom_remove": "Auswahl entfernen",
+        "custom_mine": "Meine Ticker (immer im Band):",
+        "custom_add_raw": "\"{s}\" wie eingegeben hinzufügen (wird gegen Yahoo geprüft)",
+        "custom_added": "{s} zum Band hinzugefügt.",
+        "my_tickers": "Meine Ticker",
+        "menu_tip": "Menü",
     },
 }
 
@@ -168,7 +261,10 @@ def tr(key, **kw):
 
 
 def market_label(m):
-    """Etiqueta de mercado con el país en el idioma activo."""
+    """Etiqueta de mercado con el país en el idioma activo. "CUSTOM" es el
+    pseudo-mercado de los tickers personalizados del usuario."""
+    if m == "CUSTOM":
+        return tr("my_tickers")
     name, country = MARKET_INFO.get(m, (m, None))
     return f"{name} ({_COUNTRY[country][_lang]})" if country else name
 
@@ -197,6 +293,68 @@ def display_label(symbol):
     return re.sub(r"\d+$", "", base) or base
 
 
+# Nombre completo de cada símbolo de scraper.py (la lista es fija, así que
+# un dict estático evita otra llamada a yfinance). Se usa en el diálogo de
+# noticias/gráfico: por ticker solo no siempre se reconoce la compañía.
+COMPANY_NAMES = {
+    "^STOXX50E": "EURO STOXX 50", "ASML.AS": "ASML Holding", "MC.PA": "LVMH Moët Hennessy",
+    "SAP.DE": "SAP", "NESN.SW": "Nestlé",
+    "^GDAXI": "DAX 40", "SIE.DE": "Siemens", "ALV.DE": "Allianz",
+    "MUV2.DE": "Münchener Rück",
+    "^FCHI": "CAC 40", "OR.PA": "L'Oréal", "TTE.PA": "TotalEnergies", "AIR.PA": "Airbus",
+    "^IBEX": "IBEX 35", "SAN.MC": "Banco Santander", "ITX.MC": "Inditex (Zara)",
+    "IBE.MC": "Iberdrola", "TEF.MC": "Telefónica",
+    "^FTSE": "FTSE 100", "SHEL.L": "Shell", "AZN.L": "AstraZeneca",
+    "HSBA.L": "HSBC Holdings", "ULVR.L": "Unilever",
+    "FTSEMIB.MI": "FTSE MIB", "ENI.MI": "Eni", "ISP.MI": "Intesa Sanpaolo",
+    "UCG.MI": "UniCredit", "ENEL.MI": "Enel",
+    "^SSMI": "Swiss Market Index", "NOVN.SW": "Novartis", "ROG.SW": "Roche",
+    "UBSG.SW": "UBS Group",
+    "^NYA": "NYSE Composite", "JPM": "JPMorgan Chase", "XOM": "Exxon Mobil",
+    "JNJ": "Johnson & Johnson", "V": "Visa",
+    "^IXIC": "NASDAQ Composite", "AAPL": "Apple", "MSFT": "Microsoft",
+    "GOOGL": "Alphabet (Google)", "NVDA": "NVIDIA", "AMZN": "Amazon",
+    "^GSPC": "S&P 500", "BRK-B": "Berkshire Hathaway", "LLY": "Eli Lilly",
+    "AVGO": "Broadcom", "TSLA": "Tesla",
+    "^GSPTSE": "S&P/TSX Composite", "RY.TO": "Royal Bank of Canada",
+    "TD.TO": "Toronto-Dominion Bank", "SHOP.TO": "Shopify", "ENB.TO": "Enbridge",
+    "^N225": "Nikkei 225", "7203.T": "Toyota Motor", "6758.T": "Sony Group",
+    "9984.T": "SoftBank Group", "8306.T": "Mitsubishi UFJ Financial",
+    "^HSI": "Hang Seng", "0700.HK": "Tencent Holdings", "9988.HK": "Alibaba Group",
+    "0005.HK": "HSBC Holdings", "1299.HK": "AIA Group",
+    "000001.SS": "SSE Composite", "600519.SS": "Kweichow Moutai",
+    "601398.SS": "ICBC", "601857.SS": "PetroChina",
+    "^KS11": "KOSPI", "005930.KS": "Samsung Electronics", "000660.KS": "SK Hynix",
+    "005380.KS": "Hyundai Motor",
+    "^BSESN": "BSE Sensex", "RELIANCE.NS": "Reliance Industries",
+    "TCS.NS": "Tata Consultancy Services", "HDFCBANK.NS": "HDFC Bank",
+    "^AXJO": "S&P/ASX 200", "BHP.AX": "BHP Group", "CBA.AX": "Commonwealth Bank",
+    "CSL.AX": "CSL",
+    "^BVSP": "Ibovespa", "VALE3.SA": "Vale", "PETR4.SA": "Petrobras",
+    "ITUB4.SA": "Itaú Unibanco",
+    "^MERV": "S&P MERVAL", "GGAL.BA": "Grupo Financiero Galicia", "YPFD.BA": "YPF",
+    "PAMP.BA": "Pampa Energía", "CEPU.BA": "Central Puerto", "ALUA.BA": "Aluar",
+}
+
+
+# Nombres de los tickers personalizados del usuario (symbol → name), se
+# cargan del backend (/api/custom) al arrancar y al modificar la lista.
+CUSTOM_NAMES = {}
+
+
+def company_label(symbol):
+    """Nombre completo para diálogos: "Compañía (TICKER)"; si el símbolo no
+    está en el dict (no debería pasar), cae a la etiqueta de la cinta."""
+    name = COMPANY_NAMES.get(symbol) or CUSTOM_NAMES.get(symbol)
+    short = display_label(symbol)
+    return f"{name} ({short})" if name and name != short else short
+
+
+def ver_tuple(s):
+    """Convierte "v0.2.1" en (0, 2, 1) para comparar versiones."""
+    return tuple(int(n) for n in re.findall(r"\d+", s or "")[:3]) or (0,)
+
+
 # Rangos de precio predefinidos (etiqueta, min, max)
 PRICE_RANGES = [
     ("Todos los precios", None, None),
@@ -206,6 +364,18 @@ PRICE_RANGES = [
     ("51 – 100 €", 51, 100),
     ("100 – 500 €", 100, 500),
     ("+500 €", 500, 100000),
+]
+
+# Escalas de variación diaria en % (etiqueta, change_min, change_max).
+# La primera etiqueta se traduce con tr("all_changes"); el resto es neutro.
+PCT_RANGES = [
+    ("all_changes", None, None),
+    ("▲ > 0 %", 0, None),
+    ("▲ > +2 %", 2, None),
+    ("▲ > +5 %", 5, None),
+    ("▼ < 0 %", None, 0),
+    ("▼ < −2 %", None, -2),
+    ("▼ < −5 %", None, -5),
 ]
 
 
@@ -219,6 +389,7 @@ class TapeWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.tickers = []          # datos actuales
+        self.status_msg = None     # texto a mostrar mientras no hay datos
         self.offset = 0.0          # desplazamiento horizontal
         self._hit_zones = []       # [(x_ini, x_fin, symbol)] para clicks
         self._tape_width = 1       # ancho total de una pasada de la cinta
@@ -232,6 +403,12 @@ class TapeWidget(QWidget):
     def set_tickers(self, tickers):
         """Actualiza los datos que muestra la cinta."""
         self.tickers = tickers
+        self.update()
+
+    def set_status(self, msg):
+        """Mensaje mostrado mientras la cinta está vacía (diagnóstico:
+        distingue backend caído de scrape sin datos)."""
+        self.status_msg = msg
         self.update()
 
     def _advance(self):
@@ -263,7 +440,7 @@ class TapeWidget(QWidget):
         segs = self._segments()
         if not segs:
             p.setPen(DIM)
-            p.drawText(10, y, tr("waiting"))
+            p.drawText(10, y, self.status_msg or tr("waiting"))
             return
 
         widths = [fm.horizontalAdvance(s[0]) + self.GAP for s in segs]
@@ -290,10 +467,85 @@ class TapeWidget(QWidget):
                 return
 
 
+class HistoryChart(QWidget):
+    """Gráfico de línea de la última sesión (intradía 15 min), estética HUD.
+
+    Mismo patrón que TapeWidget: paintEvent propio con QPainter, sin
+    dependencias de gráficos (los instaladores no cambian).
+    """
+
+    MARGIN = 10       # margen interior del trazado
+    LABEL_H = 16      # franja superior/inferior para las etiquetas
+
+    def __init__(self, points, parent=None):
+        # points: [(iso_timestamp, precio)] en orden cronológico
+        super().__init__(parent)
+        self.points = points
+        self.setMinimumHeight(150)
+        self.font_small = QFont("DejaVu Sans Mono", 8)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), BG)
+        prices = [pt[1] for pt in self.points]
+        if len(prices) < 2:
+            return
+        lo, hi = min(prices), max(prices)
+        span = (hi - lo) or 1.0
+        up = prices[-1] >= prices[0]
+        color = GREEN if up else RED
+
+        m = self.MARGIN
+        x0, y0 = m, m + self.LABEL_H
+        w = self.width() - 2 * m
+        h = self.height() - 2 * (m + self.LABEL_H)
+        if w <= 0 or h <= 0:
+            return
+
+        # línea punteada de referencia en el precio de apertura
+        base_y = y0 + h - (prices[0] - lo) * h / span
+        pen = QPen(DIM)
+        pen.setStyle(Qt.PenStyle.DotLine)
+        p.setPen(pen)
+        p.drawLine(x0, int(base_y), x0 + w, int(base_y))
+
+        # curva del día
+        step = w / (len(prices) - 1)
+        poly = QPolygonF([QPointF(x0 + i * step, y0 + h - (v - lo) * h / span)
+                          for i, v in enumerate(prices)])
+        pen = QPen(color)
+        pen.setWidthF(1.6)
+        p.setPen(pen)
+        p.drawPolyline(poly)
+
+        # etiquetas: máx/mín (izq), variación de la sesión y último (der),
+        # horas de inicio/fin (abajo)
+        p.setFont(self.font_small)
+        fm = QFontMetrics(self.font_small)
+        p.setPen(DIM)
+        p.drawText(x0, m + fm.ascent(), f"max {hi:,.2f}")
+        p.drawText(x0, self.height() - m - fm.descent(), f"min {lo:,.2f}")
+        t0, t1 = self.points[0][0][11:16], self.points[-1][0][11:16]
+        hours = f"{t0} – {t1}"
+        p.drawText(x0 + w - fm.horizontalAdvance(hours),
+                   self.height() - m - fm.descent(), hours)
+        pct = (prices[-1] - prices[0]) / prices[0] * 100 if prices[0] else 0
+        last = f"{prices[-1]:,.2f} {'▲' if up else '▼'}{abs(pct):.2f}%"
+        p.setPen(color)
+        p.drawText(x0 + w - fm.horizontalAdvance(last), m + fm.ascent(), last)
+        p.end()
+
+
 class TickerBanner(QWidget):
     """Banner de cotizaciones: fino, sin marco, ancho completo de pantalla."""
 
     HEIGHT = 32
+
+    # Señales para volver del hilo de red al hilo de la interfaz (Qt las
+    # encola automáticamente cuando se emiten desde otro hilo)
+    update_checked = pyqtSignal(dict)
+    update_progress = pyqtSignal(int)
+    update_finished = pyqtSignal(bool, str)
 
     def __init__(self):
         super().__init__()
@@ -302,12 +554,16 @@ class TickerBanner(QWidget):
         self.live = False  # estado del último fetch (LED)
 
         self.setWindowTitle("Market Ticker")
-        # Nota: sin Qt.Tool — ese flag oculta la ventana cuando la app
-        # pierde el foco, y un banner debe quedar siempre visible.
-        self.setWindowFlags(
-            Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-        )
+        # Nota: sin Qt.Tool en Linux/macOS — bajo Wayland/XWayland ese flag
+        # oculta la ventana cuando la app pierde el foco, y un banner debe
+        # quedar siempre visible. En Windows sí lo usamos: ahí un Tool window
+        # no se oculta al perder foco y es lo que saca al banner de la barra
+        # de tareas (WS_EX_TOOLWINDOW).
+        flags = (Qt.WindowType.FramelessWindowHint
+                 | Qt.WindowType.WindowStaysOnTopHint)
+        if sys.platform == "win32":
+            flags |= Qt.WindowType.Tool
+        self.setWindowFlags(flags)
         self._init_ui()
         self._place()
         # Si el área de trabajo cambia (el sistema informa sus barras tarde,
@@ -326,14 +582,29 @@ class TickerBanner(QWidget):
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.fetch_tickers)
         self.refresh_timer.start(60 * 1000)  # consulta al backend cada 1 min
+        self._load_custom_names()
         self.fetch_tickers()
+
+        # Actualizaciones: chequeo contra GitHub al arrancar (diferido para
+        # no demorar el banner) y después una vez por día mientras corre.
+        self.update_info = None      # {"version": ..., "url": ...} si hay nueva
+        self._manual_check = False   # el chequeo manual (⚙) siempre responde
+        self._dl_dialog = None
+        self.update_checked.connect(self._on_update_checked)
+        self.update_progress.connect(self._on_update_progress)
+        self.update_finished.connect(self._on_update_finished)
+        QTimer.singleShot(15 * 1000, self._check_updates_async)
+        self.update_timer = QTimer(self)
+        self.update_timer.timeout.connect(self._check_updates_async)
+        self.update_timer.start(24 * 3600 * 1000)
 
     # ---------- configuración ----------
 
     def _load_config(self):
         """Carga config.json normalizando valores de versiones anteriores."""
         default = {"position": "top", "markets": [], "price_range": 0,
-                   "reserve_space": True, "lang": "es", "autostart": True}
+                   "pct_range": 0, "reserve_space": True, "lang": "es",
+                   "autostart": True, "declined_update": ""}
         try:
             with open(self.config_path) as f:
                 cfg = {**default, **json.load(f)}
@@ -348,15 +619,18 @@ class TickerBanner(QWidget):
         # Normaliza valores legados o corruptos
         if not isinstance(cfg.get("markets"), list):
             cfg["markets"] = []
-        cfg["markets"] = [m for m in cfg["markets"] if m in MARKETS]
+        cfg["markets"] = [m for m in cfg["markets"] if m in MARKETS + ["CUSTOM"]]
         if cfg.get("position") not in ("top", "bottom"):
             cfg["position"] = "top"
         if not isinstance(cfg.get("price_range"), int) or not (0 <= cfg["price_range"] < len(PRICE_RANGES)):
             cfg["price_range"] = 0
+        if not isinstance(cfg.get("pct_range"), int) or not (0 <= cfg["pct_range"] < len(PCT_RANGES)):
+            cfg["pct_range"] = 0
         cfg["reserve_space"] = bool(cfg.get("reserve_space", True))
         if cfg.get("lang") not in I18N:
             cfg["lang"] = "es"
         cfg["autostart"] = bool(cfg.get("autostart", True))
+        cfg["declined_update"] = str(cfg.get("declined_update") or "")
         global _lang
         _lang = cfg["lang"]
         return {k: cfg[k] for k in default}
@@ -383,6 +657,30 @@ class TickerBanner(QWidget):
 
         self.tape = TapeWidget(self)
         row.addWidget(self.tape, stretch=1)
+
+        # ⬆ aparece solo cuando hay una versión nueva en GitHub
+        self.update_btn = QPushButton("⬆")
+        self.update_btn.setFixedSize(18, 18)
+        self.update_btn.setStyleSheet(
+            f"QPushButton {{color:{GREEN.name()}; background:transparent;"
+            " border:none; font-size:12px; font-weight:bold;}"
+            "QPushButton:hover {color:#c9d1d9;}"
+        )
+        self.update_btn.clicked.connect(self._prompt_update)
+        self.update_btn.hide()
+        row.addWidget(self.update_btn)
+
+        # ☰ despliega el mismo menú que el click derecho (más descubrible,
+        # y en macOS/trackpads el click derecho no siempre está a mano)
+        self.menu_btn = QPushButton("☰")
+        self.menu_btn.setFixedSize(18, 18)
+        self.menu_btn.setToolTip(tr("menu_tip"))
+        self.menu_btn.setStyleSheet(
+            "QPushButton {color:#4a5568; background:transparent; border:none; font-size:12px;}"
+            "QPushButton:hover {color:#c9d1d9;}"
+        )
+        self.menu_btn.clicked.connect(self._show_menu)
+        row.addWidget(self.menu_btn)
 
         self.gear_btn = QPushButton("⚙")
         self.gear_btn.setFixedSize(18, 18)
@@ -543,26 +841,34 @@ class TickerBanner(QWidget):
         if not getattr(self, "_appbar_registered", False):
             shell.SHAppBarMessage(ABM_NEW, ctypes.byref(abd))
             self._appbar_registered = True
+        # SHAppBarMessage trabaja en píxeles físicos; Qt en lógicos (con
+        # escalado 125/150% difieren y la reserva quedaba corta/corrida).
         geo = self.screen().geometry()
+        dpr = self.screen().devicePixelRatio()
         abd.uEdge = ABE_BOTTOM if self.config.get("position") == "bottom" else ABE_TOP
-        abd.rc.left, abd.rc.right = geo.x(), geo.x() + geo.width()
+        abd.rc.left = round(geo.x() * dpr)
+        abd.rc.right = round((geo.x() + geo.width()) * dpr)
         if abd.uEdge == ABE_TOP:
-            abd.rc.top = geo.y()
-            abd.rc.bottom = geo.y() + self.HEIGHT
+            abd.rc.top = round(geo.y() * dpr)
+            abd.rc.bottom = round((geo.y() + self.HEIGHT) * dpr)
         else:
-            abd.rc.bottom = geo.y() + geo.height()
-            abd.rc.top = abd.rc.bottom - self.HEIGHT
+            abd.rc.bottom = round((geo.y() + geo.height()) * dpr)
+            abd.rc.top = abd.rc.bottom - round(self.HEIGHT * dpr)
         shell.SHAppBarMessage(ABM_QUERYPOS, ctypes.byref(abd))
         shell.SHAppBarMessage(ABM_SETPOS, ctypes.byref(abd))
         self._strut_active = True
         # ocupar exactamente el rectángulo concedido por el sistema
-        self.move(abd.rc.left, abd.rc.top)
+        self.move(round(abd.rc.left / dpr), round(abd.rc.top / dpr))
 
-    def _set_led(self, live):
-        """Actualiza el LED: verde = datos en vivo, rojo = sin conexión."""
+    def _set_led(self, live, detail=None):
+        """Actualiza el LED: verde = datos en vivo, rojo = sin conexión.
+        detail agrega la causa concreta al tooltip (diagnóstico)."""
         self.live = live
+        self._led_detail = detail
         color = GREEN.name() if live else RED.name()
         tip = tr("live") if live else tr("not_live")
+        if detail:
+            tip = f"{tip}\n{detail}"
         self.led.setStyleSheet(f"color: {color}; font-size: 10px;")
         self.led.setToolTip(f"{tr('data_status')}: {tip}")
 
@@ -578,37 +884,88 @@ class TickerBanner(QWidget):
             if pmin is not None:
                 params["price_min"] = pmin
                 params["price_max"] = pmax
+            _, cmin, cmax = PCT_RANGES[self.config.get("pct_range", 0)]
+            if cmin is not None:
+                params["change_min"] = cmin
+            if cmax is not None:
+                params["change_max"] = cmax
             r = requests.get(f"{BACKEND_URL}/api/tickers", params=params, timeout=5)
             r.raise_for_status()
-            self.tape.set_tickers(r.json().get("tickers", []))
-            self._set_led(self._data_is_live())
-        except requests.RequestException:
-            self._set_led(False)
+            tickers = r.json().get("tickers", [])
+            self.tape.set_tickers(tickers)
+            live, error = self._backend_status()
+            self._set_led(live, error)
+            if not tickers:
+                # cinta vacía: mostrar la causa real en vez del genérico
+                self.tape.set_status(tr("waiting_err", e=error) if error else None)
+        except requests.RequestException as e:
+            # el backend no contesta: eso NO es "esperando datos"
+            self._set_led(False, str(e))
+            self.tape.set_status(tr("no_backend"))
 
-    def _data_is_live(self):
-        """True solo si el backend scrapeó datos reales hace menos de 20 min."""
+    def _load_custom_names(self):
+        """Refresca el mapa symbol→nombre de los tickers personalizados."""
+        try:
+            r = requests.get(f"{BACKEND_URL}/api/custom", timeout=5)
+            CUSTOM_NAMES.clear()
+            CUSTOM_NAMES.update({t["symbol"]: t.get("name") or ""
+                                 for t in r.json().get("tickers", [])})
+        except (requests.RequestException, ValueError):
+            pass  # backend viejo sin /api/custom o backend caído
+        self._ensure_custom_market()
+
+    def _ensure_custom_market(self):
+        """Invariante pedido por el usuario: mientras haya tickers
+        personalizados, el mercado "Mis tickers" queda seleccionado (así
+        nunca desaparecen de la cinta por un filtro de mercados)."""
+        markets = self.config.get("markets") or []
+        if CUSTOM_NAMES and markets and "CUSTOM" not in markets:
+            self.config["markets"].append("CUSTOM")
+            self._save_config()
+        elif not CUSTOM_NAMES and "CUSTOM" in markets:
+            # sin tickers personalizados el pseudo-mercado no tiene sentido
+            self.config["markets"].remove("CUSTOM")
+            self._save_config()
+
+    def _backend_status(self):
+        """(vivo, error): vivo si el backend scrapeó datos reales hace menos
+        de 20 min; error es la causa del último scrape fallido (o None)."""
         try:
             r = requests.get(f"{BACKEND_URL}/api/health", timeout=5)
             info = r.json().get("last_scrape", {})
+            error = info.get("error")
             if info.get("ok") and info.get("time"):
                 age = datetime.now() - datetime.fromisoformat(info["time"])
-                return age < timedelta(minutes=20)
+                return age < timedelta(minutes=20), error
+            return False, error
         except (requests.RequestException, ValueError):
-            pass
-        return False
+            return False, None
 
     def show_news(self, symbol):
-        """Muestra las noticias del símbolo clickeado."""
+        """Muestra el gráfico intradía y las noticias del símbolo clickeado."""
         try:
             r = requests.get(f"{BACKEND_URL}/api/news", params={"symbol": symbol}, timeout=5)
             news = r.json().get("news", [])
         except requests.RequestException:
             news = []
+        # curva de la última sesión (backend viejo sin /api/history → sin gráfico)
+        try:
+            r = requests.get(f"{BACKEND_URL}/api/history",
+                             params={"symbol": symbol}, timeout=15)
+            points = [(pt["t"], pt["p"]) for pt in r.json().get("points", [])]
+        except (requests.RequestException, ValueError, KeyError, TypeError):
+            points = []
 
         dlg = QDialog(self)
-        dlg.setWindowTitle(f"{tr('news_title')} — {display_label(symbol)}")
-        dlg.resize(560, 360)
+        dlg.setWindowTitle(f"{tr('news_title')} — {company_label(symbol)}")
+        dlg.setStyleSheet(f"background-color: {BG.name()}; color: {FG.name()};")
+        dlg.resize(560, 500 if points else 360)
         lay = QVBoxLayout(dlg)
+        if points:
+            lay.addWidget(QLabel(tr("chart_label", d=points[0][0][:10])))
+            lay.addWidget(HistoryChart(points))
+        else:
+            lay.addWidget(QLabel(tr("chart_none", s=company_label(symbol))))
         if news:
             lay.addWidget(QLabel(tr("news_click")))
             lst = QListWidget()
@@ -621,7 +978,7 @@ class TickerBanner(QWidget):
                 if it.data(Qt.ItemDataRole.UserRole) else None)
             lay.addWidget(lst)
         else:
-            lay.addWidget(QLabel(tr("news_none", s=display_label(symbol))))
+            lay.addWidget(QLabel(tr("news_none", s=company_label(symbol))))
         btn = QPushButton(tr("close"))
         btn.clicked.connect(dlg.close)
         lay.addWidget(btn)
@@ -630,7 +987,17 @@ class TickerBanner(QWidget):
     # ---------- menú contextual ----------
 
     def contextMenuEvent(self, event):
-        """Click derecho: posición, filtros y gestión de backups."""
+        """Click derecho: el menú principal."""
+        self._build_menu().exec(event.globalPos())
+
+    def _show_menu(self):
+        """Botón ☰: el mismo menú del click derecho, desplegado desde ahí."""
+        self._build_menu().exec(
+            self.menu_btn.mapToGlobal(QPoint(0, self.menu_btn.height())))
+
+    def _build_menu(self):
+        """Menú principal: posición, filtros y gestión de backups (lo usan
+        el click derecho y el botón ☰)."""
         menu = QMenu(self)
 
         pos_menu = menu.addMenu(tr("position"))
@@ -656,6 +1023,15 @@ class TickerBanner(QWidget):
             act.setChecked(m in self.config.get("markets", []))
             act.triggered.connect(lambda _, v=m: self._toggle_market(v))
             mkt_menu.addAction(act)
+        if CUSTOM_NAMES:
+            # los tickers personalizados como pseudo-mercado: permite
+            # verlos solos o combinados (con filtro activo quedan siempre
+            # seleccionados vía _ensure_custom_market)
+            mkt_menu.addSeparator()
+            act = QAction(market_label("CUSTOM"), self, checkable=True)
+            act.setChecked("CUSTOM" in self.config.get("markets", []))
+            act.triggered.connect(lambda _: self._toggle_market("CUSTOM"))
+            mkt_menu.addAction(act)
 
         price_menu = menu.addMenu(tr("price_range"))
         for i, (label, _, _) in enumerate(PRICE_RANGES):
@@ -663,6 +1039,15 @@ class TickerBanner(QWidget):
             act.setChecked(self.config.get("price_range", 0) == i)
             act.triggered.connect(lambda _, v=i: self._change_price_range(v))
             price_menu.addAction(act)
+
+        pct_menu = menu.addMenu(tr("change_range"))
+        for i, (label, _, _) in enumerate(PCT_RANGES):
+            act = QAction(label if i else tr("all_changes"), self, checkable=True)
+            act.setChecked(self.config.get("pct_range", 0) == i)
+            act.triggered.connect(lambda _, v=i: self._change_pct_range(v))
+            pct_menu.addAction(act)
+
+        menu.addAction(tr("custom_tickers"), self._show_custom_tickers)
 
         menu.addSeparator()
         menu.addAction(tr("refresh"), self.fetch_tickers)
@@ -674,7 +1059,7 @@ class TickerBanner(QWidget):
         menu.addSeparator()
         menu.addAction(tr("about"), self._show_about)
         menu.addAction(tr("quit"), self.close)
-        menu.exec(event.globalPos())
+        return menu
 
     def _change_position(self, value):
         """Cambia el banner de borde de pantalla y reubica la reserva."""
@@ -694,6 +1079,7 @@ class TickerBanner(QWidget):
         """Fija la lista de mercados visibles (vacía = todos)."""
         self.config["markets"] = markets
         self._save_config()
+        self._ensure_custom_market()
         self.fetch_tickers()
 
     def _toggle_market(self, market):
@@ -733,7 +1119,8 @@ class TickerBanner(QWidget):
         lay.addWidget(QLabel(tr("markets_label")))
         grid = QGridLayout()
         boxes = {}
-        for i, m in enumerate(MARKETS):
+        listed = MARKETS + (["CUSTOM"] if CUSTOM_NAMES else [])
+        for i, m in enumerate(listed):
             cb = QCheckBox(market_label(m))
             cb.setChecked(m in self.config.get("markets", []))
             boxes[m] = cb
@@ -760,9 +1147,15 @@ class TickerBanner(QWidget):
         btn_row = QHBoxLayout()
         about_btn = QPushButton(tr("about"))
         about_btn.clicked.connect(self._show_about)
+        # actualización siempre a mano desde acá (aunque se haya pospuesto)
+        upd_btn = QPushButton(
+            tr("update_btn", v=self.update_info["version"]) if self.update_info
+            else tr("update_check"))
+        upd_btn.clicked.connect(self._settings_update_clicked)
         save_btn = QPushButton(tr("save"))
         cancel_btn = QPushButton(tr("cancel"))
         btn_row.addWidget(about_btn)
+        btn_row.addWidget(upd_btn)
         btn_row.addStretch()
         btn_row.addWidget(save_btn)
         btn_row.addWidget(cancel_btn)
@@ -778,10 +1171,19 @@ class TickerBanner(QWidget):
             self.config["autostart"] = autostart_cb.isChecked()
             self._set_autostart(autostart_cb.isChecked())
             self._save_config()
+            self._ensure_custom_market()
             self._remove_strut()
             self._place()
             QTimer.singleShot(250, self._apply_strut)
             self.fetch_tickers()
+
+    def _settings_update_clicked(self):
+        """Botón de ⚙: actualiza si ya hay versión conocida, si no chequea."""
+        if self.update_info:
+            self._prompt_update()
+        else:
+            self._manual_check = True
+            self._check_updates_async()
 
     def _set_lang(self, code, dlg=None):
         """Cambia el idioma de la interfaz y refresca los textos persistentes."""
@@ -791,7 +1193,8 @@ class TickerBanner(QWidget):
         self._save_config()
         self.gear_btn.setToolTip(tr("gear_tip"))
         self.close_btn.setToolTip(tr("close"))
-        self._set_led(self.live)
+        self.menu_btn.setToolTip(tr("menu_tip"))
+        self._set_led(self.live, getattr(self, "_led_detail", None))
         if dlg is not None:
             dlg.reject()
             QTimer.singleShot(0, self._show_settings)
@@ -805,7 +1208,7 @@ class TickerBanner(QWidget):
         lay.setSpacing(8)
 
         info = QLabel(
-            f"<b>Market Ticker</b><br>"
+            f"<b>Market Ticker</b> v{APP_VERSION}<br>"
             f"<br>{AUTHOR['name']}<br>"
             f"<span style='color:{DIM.name()}'>{AUTHOR['title']}</span><br><br>"
             f"<a style='color:{GREEN.name()}' href='{AUTHOR['github']}'>GitHub</a> · "
@@ -825,6 +1228,123 @@ class TickerBanner(QWidget):
         self.config["price_range"] = index
         self._save_config()
         self.fetch_tickers()
+
+    def _change_pct_range(self, index):
+        """Cambia el filtro de variación diaria en %."""
+        self.config["pct_range"] = index
+        self._save_config()
+        self.fetch_tickers()
+
+    def _show_custom_tickers(self):
+        """Diálogo de tickers personalizados: buscador contra Yahoo, agregar
+        con + y quitar con − (la lista persiste en el backend y sus símbolos
+        entran al scrape cada 15 min como mercado CUSTOM)."""
+        dlg = QDialog(self)
+        dlg.setWindowTitle(tr("custom_title"))
+        dlg.setStyleSheet(f"background-color: {BG.name()}; color: {FG.name()};")
+        dlg.resize(500, 460)
+        lay = QVBoxLayout(dlg)
+
+        srow = QHBoxLayout()
+        edit = QLineEdit()
+        edit.setPlaceholderText(tr("custom_search_ph"))
+        sbtn = QPushButton(tr("search"))
+        srow.addWidget(edit, stretch=1)
+        srow.addWidget(sbtn)
+        lay.addLayout(srow)
+
+        results = QListWidget()
+        lay.addWidget(results, stretch=2)
+        add_btn = QPushButton("+ " + tr("custom_add"))
+        lay.addWidget(add_btn)
+
+        lay.addWidget(QLabel(tr("custom_mine")))
+        mine = QListWidget()
+        lay.addWidget(mine, stretch=1)
+        del_btn = QPushButton("− " + tr("custom_remove"))
+        lay.addWidget(del_btn)
+
+        msg = QLabel("")
+        msg.setStyleSheet(f"color: {DIM.name()};")
+        lay.addWidget(msg)
+        close_btn = QPushButton(tr("close"))
+        close_btn.clicked.connect(dlg.close)
+        lay.addWidget(close_btn)
+
+        role = Qt.ItemDataRole.UserRole
+
+        def refresh_mine():
+            self._load_custom_names()
+            mine.clear()
+            for sym, name in sorted(CUSTOM_NAMES.items()):
+                item = QListWidgetItem(f"{sym} — {name}" if name else sym)
+                item.setData(role, sym)
+                mine.addItem(item)
+
+        def do_search():
+            q = edit.text().strip()
+            if not q:
+                return
+            results.clear()
+            msg.setText("…")
+            QApplication.processEvents()
+            try:
+                r = requests.get(f"{BACKEND_URL}/api/search",
+                                 params={"q": q}, timeout=15)
+                found = r.json().get("results", [])
+            except (requests.RequestException, ValueError):
+                found = []
+            for f in found:
+                extra = f"   [{f['exchange']}]" if f.get("exchange") else ""
+                item = QListWidgetItem(f"{f['symbol']} — {f['name']}{extra}")
+                item.setData(role, (f["symbol"], f["name"]))
+                results.addItem(item)
+            if not found:
+                # sin resultados: ofrecer el texto tal cual (el backend lo
+                # valida contra Yahoo al agregar)
+                item = QListWidgetItem(tr("custom_add_raw", s=q.upper()))
+                item.setData(role, (q.upper(), ""))
+                results.addItem(item)
+            msg.setText("")
+
+        def do_add():
+            item = results.currentItem()
+            if item is None:
+                return
+            sym, name = item.data(role)
+            msg.setText("…")
+            QApplication.processEvents()
+            try:
+                r = requests.post(f"{BACKEND_URL}/api/custom",
+                                  json={"symbol": sym, "name": name}, timeout=30)
+                if r.ok:
+                    msg.setText(tr("custom_added", s=sym))
+                    refresh_mine()
+                    self.fetch_tickers()
+                else:
+                    msg.setText(r.json().get("error") or tr("error"))
+            except (requests.RequestException, ValueError):
+                msg.setText(tr("no_backend"))
+
+        def do_del():
+            item = mine.currentItem()
+            if item is None:
+                return
+            try:
+                requests.delete(f"{BACKEND_URL}/api/custom/{item.data(role)}",
+                                timeout=10)
+            except requests.RequestException:
+                pass
+            refresh_mine()
+            self.fetch_tickers()
+
+        sbtn.clicked.connect(do_search)
+        edit.returnPressed.connect(do_search)
+        add_btn.clicked.connect(do_add)
+        results.itemDoubleClicked.connect(lambda _: do_add())
+        del_btn.clicked.connect(do_del)
+        refresh_mine()
+        dlg.exec()
 
     # ---------- backups ----------
 
@@ -849,6 +1369,165 @@ class TickerBanner(QWidget):
             except requests.RequestException as e:
                 QMessageBox.warning(self, tr("backups"), f"{tr('error')}: {e}")
 
+
+    # ---------- actualizaciones (releases de GitHub) ----------
+
+    def _check_updates_async(self):
+        """Consulta GitHub en un hilo aparte (no bloquea la cinta)."""
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
+
+    def _check_updates_worker(self):
+        """Compara APP_VERSION con el último release y busca el instalador
+        del SO actual entre sus assets. Corre en un hilo: solo emite señales."""
+        try:
+            r = requests.get(UPDATE_API, timeout=10,
+                             headers={"Accept": "application/vnd.github+json"})
+            r.raise_for_status()
+            data = r.json()
+            tag = data.get("tag_name") or data.get("name") or ""
+            if ver_tuple(tag) <= ver_tuple(APP_VERSION):
+                self.update_checked.emit({"status": "none"})
+                return
+            ext = {"win32": ".msi", "darwin": ".pkg"}.get(sys.platform, ".deb")
+            url = next((a.get("browser_download_url")
+                        for a in data.get("assets", [])
+                        if a.get("name", "").endswith(ext)), None)
+            version = tag.lstrip("vV")
+            if url:
+                self.update_checked.emit(
+                    {"status": "update", "version": version, "url": url})
+            else:
+                self.update_checked.emit({"status": "no_asset"})
+        except (requests.RequestException, ValueError):
+            self.update_checked.emit({"status": "error"})
+
+    def _on_update_checked(self, info):
+        """Reacciona al resultado del chequeo (ya en el hilo de la UI)."""
+        manual, self._manual_check = self._manual_check, False
+        status = info.get("status")
+        if status == "update":
+            self.update_info = info
+            self.update_btn.setToolTip(tr("update_available", v=info["version"]))
+            if manual:
+                self._prompt_update()
+            elif self.config.get("declined_update") != info["version"]:
+                self.update_btn.show()
+        elif manual:
+            if status == "none":
+                QMessageBox.information(self, tr("update_title"),
+                                        tr("update_none", v=APP_VERSION))
+            elif status == "no_asset":
+                QMessageBox.warning(self, tr("update_title"), tr("update_no_asset"))
+            else:
+                QMessageBox.warning(self, tr("update_title"), tr("update_err_check"))
+
+    def _prompt_update(self):
+        """Ofrece actualizar; si el usuario desiste, el ⬆ se oculta y la
+        actualización queda disponible desde ⚙ Configuración."""
+        if not self.update_info:
+            return
+        v = self.update_info["version"]
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("update_title"))
+        box.setText(tr("update_ask", v=v))
+        yes = box.addButton(tr("update_now"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(tr("update_later"), QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is yes:
+            self._start_update()
+        else:
+            self.config["declined_update"] = v
+            self._save_config()
+            self.update_btn.hide()
+
+    def _start_update(self):
+        """Descarga el instalador en un hilo mostrando el progreso."""
+        self._dl_dialog = QProgressDialog(tr("update_downloading"), None, 0, 100, self)
+        self._dl_dialog.setWindowTitle(tr("update_title"))
+        self._dl_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._dl_dialog.setMinimumDuration(0)
+        self._dl_dialog.setValue(0)
+        threading.Thread(target=self._download_worker,
+                         args=(self.update_info["url"],), daemon=True).start()
+
+    def _download_worker(self, url):
+        """Baja el asset a un archivo temporal. Corre en un hilo."""
+        try:
+            dest = Path(tempfile.gettempdir()) / url.rsplit("/", 1)[-1]
+            with requests.get(url, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                total = int(r.headers.get("content-length") or 0)
+                done = 0
+                with open(dest, "wb") as f:
+                    for chunk in r.iter_content(chunk_size=65536):
+                        f.write(chunk)
+                        done += len(chunk)
+                        if total:
+                            self.update_progress.emit(int(done * 100 / total))
+            self.update_finished.emit(True, str(dest))
+        except (requests.RequestException, OSError) as e:
+            self.update_finished.emit(False, str(e))
+
+    def _on_update_progress(self, pct):
+        if self._dl_dialog is not None:
+            self._dl_dialog.setValue(pct)
+
+    def _on_update_finished(self, ok, payload):
+        if self._dl_dialog is not None:
+            self._dl_dialog.close()
+            self._dl_dialog = None
+        if not ok:
+            QMessageBox.warning(self, tr("update_title"),
+                                f"{tr('update_err_download')}\n{payload}")
+            return
+        self._install_update(payload)
+
+    def _install_update(self, installer_path):
+        """Deja un script actualizador corriendo aparte y cierra la app.
+
+        El script instala el paquete con el mecanismo nativo del SO (que
+        reemplaza/elimina la versión actual: MajorUpgrade en el MSI,
+        dpkg -i, installer sobre /Applications) y relanza Market Ticker.
+        Si el usuario cancela la autorización, relanza la versión actual.
+        """
+        tmp = Path(tempfile.gettempdir())
+        if sys.platform == "win32":
+            # launcher.vbs de la instalación MSI (ruta fija per-user)
+            script = tmp / "market-ticker-update.bat"
+            script.write_text(
+                '@echo off\r\n'
+                'timeout /t 2 /nobreak >nul\r\n'
+                'for /f "tokens=5" %%p in (\'netstat -ano ^| findstr ":5003" '
+                '^| findstr "LISTENING"\') do taskkill /f /pid %%p >nul 2>nul\r\n'
+                f'msiexec /i "{installer_path}" /passive\r\n'
+                'start "" wscript "%LocalAppData%\\Programs\\Market Ticker\\launcher.vbs"\r\n',
+                encoding="ascii")
+            subprocess.Popen(["cmd.exe", "/c", str(script)],
+                             creationflags=0x08000000)  # CREATE_NO_WINDOW
+        elif sys.platform == "darwin":
+            script = tmp / "market-ticker-update.sh"
+            script.write_text(
+                '#!/bin/bash\n'
+                'sleep 1\n'
+                f'PKG="{installer_path}"\n'
+                'osascript -e "do shell script \\"installer -pkg \'$PKG\' -target /\\"'
+                ' with administrator privileges"\n'
+                'kill $(lsof -ti :5003) 2>/dev/null\n'
+                'sleep 1\n'
+                'open -a "Market Ticker"\n')
+            script.chmod(0o755)
+            subprocess.Popen(["/bin/bash", str(script)], start_new_session=True)
+        else:
+            # el prerm del paquete viejo ya mata el backend (fuser -k 5003)
+            script = tmp / "market-ticker-update.sh"
+            script.write_text(
+                '#!/bin/bash\n'
+                'sleep 1\n'
+                f'pkexec /usr/bin/dpkg -i "{installer_path}"\n'
+                'setsid /usr/bin/market-ticker >/dev/null 2>&1 &\n')
+            script.chmod(0o755)
+            subprocess.Popen(["/bin/bash", str(script)], start_new_session=True)
+        self.close()
 
     # ---------- inicio automático con el sistema ----------
 
@@ -946,6 +1625,46 @@ X-GNOME-Autostart-enabled=true
         event.accept()
 
 
+def _app_icon():
+    """Icono propio de la app, buscándolo en los layouts instalado (assets/
+    junto a main.py) y de desarrollo (../assets). None si no aparece
+    (recordar: setWindowIcon(None) crashea)."""
+    here = Path(__file__).resolve().parent
+    for cand in (here / "assets" / "ticker.png",
+                 here.parent / "assets" / "ticker.png",
+                 here / "assets" / "ticker.ico"):
+        if cand.exists():
+            return QIcon(str(cand))
+    return None
+
+
+def _hide_dock_icon_macos():
+    """Saca el proceso del Dock de macOS (política Accessory), llamando a
+    AppKit por ctypes para no sumar pyobjc como dependencia. El Info.plist
+    no sirve acá: el proceso visible es el python del venv, no el bundle.
+    Si algo falla la app sigue, solo que con icono en el Dock."""
+    try:
+        import ctypes
+        objc = ctypes.cdll.LoadLibrary("/usr/lib/libobjc.dylib")
+        ctypes.cdll.LoadLibrary(
+            "/System/Library/Frameworks/AppKit.framework/AppKit")
+        objc.objc_getClass.restype = ctypes.c_void_p
+        objc.objc_getClass.argtypes = [ctypes.c_char_p]
+        objc.sel_registerName.restype = ctypes.c_void_p
+        objc.sel_registerName.argtypes = [ctypes.c_char_p]
+        send = ctypes.CFUNCTYPE(ctypes.c_void_p, ctypes.c_void_p,
+                                ctypes.c_void_p)(("objc_msgSend", objc))
+        send_i = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_void_p,
+                                  ctypes.c_void_p, ctypes.c_long)(
+                                      ("objc_msgSend", objc))
+        nsapp = send(objc.objc_getClass(b"NSApplication"),
+                     objc.sel_registerName(b"sharedApplication"))
+        # 1 = NSApplicationActivationPolicyAccessory (sin Dock ni menú)
+        send_i(nsapp, objc.sel_registerName(b"setActivationPolicy:"), 1)
+    except Exception:
+        pass
+
+
 def main():
     """Punto de entrada del banner."""
     import os
@@ -953,7 +1672,21 @@ def main():
     # visibles; forzamos X11 (XWayland) donde ambas cosas funcionan.
     if sys.platform.startswith("linux") and os.environ.get("WAYLAND_DISPLAY"):
         os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+    if sys.platform == "win32":
+        # Sin AppUserModelID propio, la barra de tareas agrupa la ventana
+        # bajo pythonw.exe y muestra el icono de Python en vez del nuestro.
+        import ctypes
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                "LeandroBergero.MarketTicker")
+        except Exception:
+            pass
     app = QApplication(sys.argv)
+    icon = _app_icon()
+    if icon is not None:
+        app.setWindowIcon(icon)
+    if sys.platform == "darwin":
+        _hide_dock_icon_macos()
     banner = TickerBanner()
     banner.show()
     # La reserva de espacio necesita la ventana ya mapeada por el gestor

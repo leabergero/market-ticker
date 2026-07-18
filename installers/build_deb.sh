@@ -5,8 +5,9 @@
 # van al home de cada usuario (TICKER_DATA_DIR / ~/.config/market-ticker).
 set -e
 
-VERSION="0.1.0"
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# La versión vive en frontend/main.py (APP_VERSION): única fuente de verdad
+VERSION="$(sed -n 's/^APP_VERSION = "\([^"]*\)".*/\1/p' "$PROJECT_DIR/frontend/main.py")"
 PKG="$PROJECT_DIR/release/deb-build"
 OUT="$PROJECT_DIR/release/market-ticker_${VERSION}_all.deb"
 
@@ -42,7 +43,7 @@ CFG="$HOME/.config/market-ticker"
 mkdir -p "$TICKER_DATA_DIR" "$CFG/config"
 cd "$CFG"
 if ! curl -s --max-time 1 http://127.0.0.1:5003/api/health >/dev/null 2>&1; then
-    "$APP/venv/bin/python" "$APP/backend/app.py" >/dev/null 2>&1 &
+    "$APP/venv/bin/python" "$APP/backend/app.py" >>"$TICKER_DATA_DIR/ticker.log" 2>&1 &
     sleep 2
 fi
 exec "$APP/venv/bin/python" "$APP/main.py"
