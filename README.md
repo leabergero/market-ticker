@@ -32,6 +32,47 @@ El inicio automático con el sistema queda **activado por defecto** (se desactiv
 
 Único requisito: [Python 3.10+](https://www.python.org/downloads/) (en Windows, marcar "Add Python to PATH"). Los zips (`market-ticker-windows.zip` / `market-ticker-macos.zip` con `install.bat` / `install.sh`) siguen disponibles como alternativa manual.
 
+### Ejecutar desde el código fuente (sin instaladores)
+
+Solo hace falta Python 3.10+ y git; las dependencias se instalan con pip en un entorno virtual. La app son dos procesos: primero el backend (datos) y después el banner.
+
+**Linux (Ubuntu/Debian)**
+
+```bash
+sudo apt install python3-venv libxcb-cursor0   # libxcb-cursor0: Qt bajo Wayland
+git clone https://github.com/leabergero/market-ticker.git
+cd market-ticker
+python3 -m venv venv && source venv/bin/activate
+pip install -r release/requirements.txt
+python backend/app.py &      # backend en 127.0.0.1:5003
+python frontend/main.py      # banner (ejecutar desde la raíz del repo)
+```
+
+**Windows (PowerShell o CMD)**
+
+```bat
+git clone https://github.com/leabergero/market-ticker.git
+cd market-ticker
+py -3 -m venv venv
+venv\Scripts\activate
+pip install -r release\requirements.txt
+venv\Scripts\pythonw.exe backend\app.py
+python frontend\main.py
+```
+
+**macOS**
+
+```bash
+git clone https://github.com/leabergero/market-ticker.git
+cd market-ticker
+python3 -m venv venv && source venv/bin/activate
+pip install -r release/requirements.txt
+python backend/app.py &
+python frontend/main.py
+```
+
+Notas: el banner se ejecuta **desde la raíz del repo** (ahí busca `config/config.json`); la base SQLite y sus backups se crean solos en `backend/data/` (o en `TICKER_DATA_DIR` si se exporta). Para regenerar los instaladores nativos desde Linux están los scripts `installers/build_msi.sh`, `build_pkg.sh` y `build_deb.sh` (requisitos en el encabezado de cada uno).
+
 ## Arquitectura
 
 ```
