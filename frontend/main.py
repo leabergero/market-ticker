@@ -20,7 +20,7 @@ from PyQt6.QtGui import (QFont, QColor, QPainter, QAction, QFontMetrics,
 BACKEND_URL = "http://127.0.0.1:5003"
 
 # Versión de la app: fuente ÚNICA de verdad (los build scripts la leen de acá)
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.4.0"
 # Releases de GitHub contra los que se chequean actualizaciones
 UPDATE_REPO = "leabergero/market-ticker"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
@@ -75,8 +75,13 @@ _COUNTRY = {
     "ar": {"es": "Argentina", "en": "Argentina", "de": "Argentinien"},
 }
 
-# Interfaz en tres idiomas; el activo vive en config["lang"]
-LANGS = [("es", "🇪🇸 Español"), ("en", "🇬🇧 English"), ("de", "🇩🇪 Deutsch")]
+# Interfaz en tres idiomas; el activo vive en config["lang"].
+# Windows no renderiza emojis de bandera regional (Segoe UI Emoji no trae
+# banderas: 🇪🇸 sale como "ES") → ahí solo el nombre del idioma.
+if sys.platform == "win32":
+    LANGS = [("es", "Español"), ("en", "English"), ("de", "Deutsch")]
+else:
+    LANGS = [("es", "🇪🇸 Español"), ("en", "🇬🇧 English"), ("de", "🇩🇪 Deutsch")]
 _lang = "es"
 
 I18N = {
@@ -137,6 +142,9 @@ I18N = {
         "my_tickers": "Mis tickers",
         "menu_tip": "Menú",
         "height_label": "Grosor del banner:",
+        "update_whats_new": "Novedades:",
+        "update_fixes": "Incluye corrección de errores.",
+        "chart_click": "Click: gráfico completo en Yahoo Finance",
     },
     "en": {
         "waiting": "waiting for data…",
@@ -195,6 +203,9 @@ I18N = {
         "my_tickers": "My tickers",
         "menu_tip": "Menu",
         "height_label": "Banner thickness:",
+        "update_whats_new": "What's new:",
+        "update_fixes": "Includes bug fixes.",
+        "chart_click": "Click: full chart on Yahoo Finance",
     },
     "de": {
         "waiting": "warte auf Daten…",
@@ -253,6 +264,9 @@ I18N = {
         "my_tickers": "Meine Ticker",
         "menu_tip": "Menü",
         "height_label": "Bannerhöhe:",
+        "update_whats_new": "Neuerungen:",
+        "update_fixes": "Enthält Fehlerkorrekturen.",
+        "chart_click": "Klick: vollständiger Chart auf Yahoo Finance",
     },
 }
 
@@ -356,6 +370,30 @@ def company_label(symbol):
 def ver_tuple(s):
     """Convierte "v0.2.1" en (0, 2, 1) para comparar versiones."""
     return tuple(int(n) for n in re.findall(r"\d+", s or "")[:3]) or (0,)
+
+
+def parse_release_notes(body, max_feats=6):
+    """Extrae del cuerpo markdown del release las funcionalidades nuevas
+    (bullets bajo encabezados "Agregado"/"Added") y si hubo correcciones
+    (encabezado "Corregido"/"Fixed"). Pedido del usuario: el detalle de los
+    bugs nunca se muestra, solo una línea genérica de corrección."""
+    feats, fixes, collecting = [], False, False
+    for line in (body or "").splitlines():
+        s = line.strip()
+        if s.startswith("#"):
+            title = s.lstrip("#").strip().lower()
+            if "corregido" in title or "fixed" in title:
+                fixes = True
+            collecting = "agregado" in title or "added" in title
+            continue
+        if not collecting or not s:
+            continue
+        if s.startswith("- "):
+            feats.append(s[2:].strip())
+        elif feats and not s.startswith("#"):
+            feats[-1] += " " + s          # continuación del bullet anterior
+    feats = [re.sub(r"\*\*(.+?)\*\*", r"\1", f) for f in feats[:max_feats]]
+    return [f if len(f) <= 220 else f[:217] + "…" for f in feats], fixes
 
 
 # Rangos de precio predefinidos (etiqueta, min, max)
@@ -480,12 +518,25 @@ class HistoryChart(QWidget):
     MARGIN = 10       # margen interior del trazado
     LABEL_H = 16      # franja superior/inferior para las etiquetas
 
-    def __init__(self, points, parent=None):
+    def __init__(self, points, symbol=None, parent=None):
         # points: [(iso_timestamp, precio)] en orden cronológico
         super().__init__(parent)
         self.points = points
+        self.symbol = symbol
         self.setMinimumHeight(150)
         self.font_small = QFont("DejaVu Sans Mono", 8)
+        if symbol:
+            # click → gráfico completo del símbolo en Yahoo Finance
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+            self.setToolTip(tr("chart_click"))
+
+    def mousePressEvent(self, event):
+        """Abre el gráfico completo de Yahoo Finance en el navegador."""
+        if self.symbol and event.button() == Qt.MouseButton.LeftButton:
+            from urllib.parse import quote
+            webbrowser.open(
+                f"https://finance.yahoo.com/chart/{quote(self.symbol, safe='')}")
+        event.accept()
 
     def paintEvent(self, event):
         p = QPainter(self)
@@ -974,7 +1025,7 @@ class TickerBanner(QWidget):
         lay = QVBoxLayout(dlg)
         if points:
             lay.addWidget(QLabel(tr("chart_label", d=points[0][0][:10])))
-            lay.addWidget(HistoryChart(points))
+            lay.addWidget(HistoryChart(points, symbol))
         else:
             lay.addWidget(QLabel(tr("chart_none", s=company_label(symbol))))
         if news:
@@ -1417,16 +1468,22 @@ class TickerBanner(QWidget):
             version = tag.lstrip("vV")
             if url:
                 self.update_checked.emit(
-                    {"status": "update", "version": version, "url": url})
+                    {"status": "update", "version": version, "url": url,
+                     "notes": data.get("body") or ""})
             else:
                 self.update_checked.emit({"status": "no_asset"})
         except (requests.RequestException, ValueError):
             self.update_checked.emit({"status": "error"})
 
     def _on_update_checked(self, info):
-        """Reacciona al resultado del chequeo (ya en el hilo de la UI)."""
+        """Reacciona al resultado del chequeo (ya en el hilo de la UI).
+
+        Los avisos van parentados al modal activo (el diálogo de ⚙ suele
+        seguir abierto): parentados al banner quedaban DEBAJO del modal y
+        el usuario nunca veía "estás en la última versión"."""
         manual, self._manual_check = self._manual_check, False
         status = info.get("status")
+        parent = QApplication.activeModalWidget() or self
         if status == "update":
             self.update_info = info
             self.update_btn.setToolTip(tr("update_available", v=info["version"]))
@@ -1436,12 +1493,12 @@ class TickerBanner(QWidget):
                 self.update_btn.show()
         elif manual:
             if status == "none":
-                QMessageBox.information(self, tr("update_title"),
+                QMessageBox.information(parent, tr("update_title"),
                                         tr("update_none", v=APP_VERSION))
             elif status == "no_asset":
-                QMessageBox.warning(self, tr("update_title"), tr("update_no_asset"))
+                QMessageBox.warning(parent, tr("update_title"), tr("update_no_asset"))
             else:
-                QMessageBox.warning(self, tr("update_title"), tr("update_err_check"))
+                QMessageBox.warning(parent, tr("update_title"), tr("update_err_check"))
 
     def _prompt_update(self):
         """Ofrece actualizar; si el usuario desiste, el ⬆ se oculta y la
@@ -1449,9 +1506,18 @@ class TickerBanner(QWidget):
         if not self.update_info:
             return
         v = self.update_info["version"]
-        box = QMessageBox(self)
+        box = QMessageBox(QApplication.activeModalWidget() or self)
         box.setWindowTitle(tr("update_title"))
         box.setText(tr("update_ask", v=v))
+        feats, fixes = parse_release_notes(self.update_info.get("notes"))
+        extra = ""
+        if feats:
+            extra = tr("update_whats_new") + "\n" + \
+                "\n".join(f"• {f}" for f in feats)
+        if fixes:
+            extra += ("\n\n" if extra else "") + tr("update_fixes")
+        if extra:
+            box.setInformativeText(extra)
         yes = box.addButton(tr("update_now"), QMessageBox.ButtonRole.AcceptRole)
         box.addButton(tr("update_later"), QMessageBox.ButtonRole.RejectRole)
         box.exec()

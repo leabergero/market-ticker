@@ -3,13 +3,26 @@
 Todas las novedades relevantes de cada versión. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/); versionado SemVer.
 
-## Sin publicar
+## v0.4.0 — 2026-07-18
 
 ### Agregado
 - **Grosor del banner configurable** (⚙ → "Grosor del banner", 20–64 px,
   default 32): en Windows el banner se sentía más invasivo que en Linux;
   ahora cada quien elige el alto de la franja. La reserva de espacio
   (strut/AppBar) y el posicionado siguen el valor elegido.
+- **Novedades al actualizar**: el aviso de versión nueva lista las
+  funcionalidades del release (y una línea genérica "Incluye corrección
+  de errores" si las hubo, sin el detalle).
+- **Click en el gráfico intradía** → abre el gráfico completo del símbolo
+  en Yahoo Finance (cursor de mano + tooltip).
+
+### Corregido
+- El aviso "Ya estás en la última versión" (⚙ → Buscar actualizaciones)
+  no se veía: quedaba debajo del diálogo de configuración (parent del
+  aviso con un modal abierto). Afectaba a los tres sistemas.
+- **Windows**: los botones de idioma mostraban "ES"/"GB"/"DE" en vez de
+  banderas (Windows no renderiza emojis de bandera): ahí ahora muestran
+  el nombre del idioma; Linux/macOS conservan las banderas.
 
 ## v0.3.2 — 2026-07-18
 

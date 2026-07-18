@@ -6,5 +6,6 @@
   "reserve_space": true,
   "lang": "es",
   "autostart": true,
-  "declined_update": ""
+  "declined_update": "",
+  "banner_height": 32
 }
