@@ -33,12 +33,19 @@ def alert(msg):
 
 def already_running():
     """True si otro launcher sigue vivo (el mutex se mantiene mientras el
-    banner corre) Y el banner realmente está en pantalla. La verificación
-    de ventana evita que un mutex colgado deje la app inutilizable."""
+    banner corre) Y el banner realmente está en pantalla. Si el otro
+    launcher recién arranca, su ventana tarda unos segundos: esperar
+    antes de decidir — sin esta espera, dos lanzamientos casi simultáneos
+    (p. ej. tras una actualización) abrían dos banners. Un mutex huérfano
+    sin ventana no bloquea (la app quedaría inutilizable en silencio)."""
     KERNEL32.CreateMutexW(None, False, "MarketTickerLauncher")
     if ctypes.get_last_error() != ERROR_ALREADY_EXISTS:
         return False
-    return bool(ctypes.windll.user32.FindWindowW(None, "Market Ticker"))
+    for _ in range(12):
+        if ctypes.windll.user32.FindWindowW(None, "Market Ticker"):
+            return True
+        time.sleep(0.5)
+    return False
 
 
 def backend_running():

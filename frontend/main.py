@@ -20,7 +20,7 @@ from PyQt6.QtGui import (QFont, QColor, QPainter, QAction, QFontMetrics,
 BACKEND_URL = "http://127.0.0.1:5003"
 
 # Versión de la app: fuente ÚNICA de verdad (los build scripts la leen de acá)
-APP_VERSION = "0.4.0"
+APP_VERSION = "0.4.1"
 # Releases de GitHub contra los que se chequean actualizaciones
 UPDATE_REPO = "leabergero/market-ticker"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
@@ -99,7 +99,7 @@ I18N = {
         "always_visible": "Siempre visible (reservar espacio)",
         "markets": "Mercados", "all": "Todos",
         "price_range": "Rango de precio", "all_prices": "Todos los precios",
-        "refresh": "Actualizar ahora",
+        "refresh": "Refrescar cotizaciones",
         "backups": "Backups", "del_old": "Borrar antiguos (> 7 días)",
         "del_all": "Borrar todos…",
         "about": "Acerca de…", "about_title": "Acerca de", "quit": "Salir",
@@ -160,7 +160,7 @@ I18N = {
         "always_visible": "Always visible (reserve space)",
         "markets": "Markets", "all": "All",
         "price_range": "Price range", "all_prices": "All prices",
-        "refresh": "Refresh now",
+        "refresh": "Refresh quotes",
         "backups": "Backups", "del_old": "Delete old (> 7 days)",
         "del_all": "Delete all…",
         "about": "About…", "about_title": "About", "quit": "Quit",
@@ -221,7 +221,7 @@ I18N = {
         "always_visible": "Immer sichtbar (Platz reservieren)",
         "markets": "Märkte", "all": "Alle",
         "price_range": "Preisbereich", "all_prices": "Alle Preise",
-        "refresh": "Jetzt aktualisieren",
+        "refresh": "Kurse aktualisieren",
         "backups": "Backups", "del_old": "Alte löschen (> 7 Tage)",
         "del_all": "Alle löschen…",
         "about": "Über…", "about_title": "Über", "quit": "Beenden",
@@ -452,6 +452,11 @@ class TapeWidget(QWidget):
         self.status_msg = msg
         self.update()
 
+    def set_font_px(self, px):
+        """Tamaño de letra en píxeles: acompaña el grosor del banner."""
+        self.font_mono.setPixelSize(px)
+        self.update()
+
     def _advance(self):
         """Avanza la cinta un paso y repinta."""
         self.offset += self.SPEED_PX
@@ -648,6 +653,7 @@ class TickerBanner(QWidget):
         # no demorar el banner) y después una vez por día mientras corre.
         self.update_info = None      # {"version": ..., "url": ...} si hay nueva
         self._manual_check = False   # el chequeo manual (⚙) siempre responde
+        self._startup_prompt = True  # el chequeo inicial avisa con diálogo
         self._dl_dialog = None
         self.update_checked.connect(self._on_update_checked)
         self.update_progress.connect(self._on_update_progress)
@@ -692,7 +698,7 @@ class TickerBanner(QWidget):
         cfg["autostart"] = bool(cfg.get("autostart", True))
         cfg["declined_update"] = str(cfg.get("declined_update") or "")
         h = cfg.get("banner_height")
-        cfg["banner_height"] = h if isinstance(h, int) and 20 <= h <= 64 else 32
+        cfg["banner_height"] = h if isinstance(h, int) and 5 <= h <= 64 else 32
         global _lang
         _lang = cfg["lang"]
         return {k: cfg[k] for k in default}
@@ -763,6 +769,27 @@ class TickerBanner(QWidget):
         )
         self.close_btn.clicked.connect(self.close)
         row.addWidget(self.close_btn)
+
+        self._apply_scale()
+
+    def _apply_scale(self):
+        """Adapta tipografías y controles al grosor elegido (5–64 px):
+        la letra de la cinta, el LED y los botones acompañan la barra."""
+        h = self.HEIGHT
+        self.tape.set_font_px(max(4, round(h * 0.45)))
+        self._led_px = max(4, h // 3)
+        s = min(18, max(5, h - 2))          # lado de los botones
+        fs = max(5, s - 6)                  # tamaño de su glifo
+        for btn, color, hover in ((self.update_btn, GREEN.name(), "#c9d1d9"),
+                                  (self.menu_btn, "#4a5568", "#c9d1d9"),
+                                  (self.gear_btn, "#4a5568", "#c9d1d9"),
+                                  (self.close_btn, "#4a5568", "#ff5c5c")):
+            btn.setFixedSize(s, s)
+            btn.setStyleSheet(
+                f"QPushButton {{color:{color}; background:transparent;"
+                f" border:none; font-size:{fs}px; font-weight:bold;}}"
+                f"QPushButton:hover {{color:{hover};}}")
+        self._set_led(self.live, getattr(self, "_led_detail", None))
 
     def _read_margins_x11(self):
         """Lee los márgenes reales del sistema desde _NET_WORKAREA del root
@@ -931,7 +958,8 @@ class TickerBanner(QWidget):
         tip = tr("live") if live else tr("not_live")
         if detail:
             tip = f"{tip}\n{detail}"
-        self.led.setStyleSheet(f"color: {color}; font-size: 10px;")
+        led_px = getattr(self, "_led_px", 10)
+        self.led.setStyleSheet(f"color: {color}; font-size: {led_px}px;")
         self.led.setToolTip(f"{tr('data_status')}: {tip}")
 
     # ---------- datos ----------
@@ -1119,6 +1147,12 @@ class TickerBanner(QWidget):
         bk_menu.addAction(tr("del_all"), self._delete_all_backups)
 
         menu.addSeparator()
+        # chequeo de versión también desde acá (el usuario lo buscaba en ☰
+        # y solo estaba en ⚙)
+        menu.addAction(
+            tr("update_btn", v=self.update_info["version"]) if self.update_info
+            else tr("update_check"),
+            self._settings_update_clicked)
         menu.addAction(tr("about"), self._show_about)
         menu.addAction(tr("quit"), self.close)
         return menu
@@ -1201,7 +1235,7 @@ class TickerBanner(QWidget):
         h_row = QHBoxLayout()
         h_row.addWidget(QLabel(tr("height_label")))
         h_spin = QSpinBox()
-        h_spin.setRange(20, 64)
+        h_spin.setRange(5, 64)
         h_spin.setSuffix(" px")
         h_spin.setValue(self.config.get("banner_height", 32))
         h_row.addWidget(h_spin)
@@ -1245,6 +1279,7 @@ class TickerBanner(QWidget):
             self._set_autostart(autostart_cb.isChecked())
             self._save_config()
             self._ensure_custom_market()
+            self._apply_scale()
             self._remove_strut()
             self._place()
             QTimer.singleShot(250, self._apply_strut)
@@ -1482,15 +1517,21 @@ class TickerBanner(QWidget):
         seguir abierto): parentados al banner quedaban DEBAJO del modal y
         el usuario nunca veía "estás en la última versión"."""
         manual, self._manual_check = self._manual_check, False
+        # el chequeo inicial (al abrir la app) avisa con el diálogo; los
+        # periódicos de cada 24 h solo muestran el ⬆ para no interrumpir
+        startup = False
+        if not manual:
+            startup, self._startup_prompt = self._startup_prompt, False
         status = info.get("status")
         parent = QApplication.activeModalWidget() or self
         if status == "update":
             self.update_info = info
             self.update_btn.setToolTip(tr("update_available", v=info["version"]))
-            if manual:
-                self._prompt_update()
-            elif self.config.get("declined_update") != info["version"]:
+            declined = self.config.get("declined_update") == info["version"]
+            if not declined:
                 self.update_btn.show()
+            if manual or (startup and not declined):
+                self._prompt_update()
         elif manual:
             if status == "none":
                 QMessageBox.information(parent, tr("update_title"),

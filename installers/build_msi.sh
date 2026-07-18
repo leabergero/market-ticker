@@ -124,8 +124,12 @@ cat > "$STAGE/market-ticker.wxs" << EOF
          OJO: wixl no sabe generar custom actions tipo 34 (Directory +
          ExeCommand), así que acá solo va la secuencia; la fila de
          CustomAction se importa después con msibuild (ver el final). -->
+    <!-- Solo en instalación NUEVA: en upgrades relanza el script del
+         auto-update; si ambos lanzaran quedaban dos banners (la carrera
+         del mutex mientras la ventana del primero aún no existe). wixl
+         sí setea WIX_UPGRADE_DETECTED (tabla Upgrade). -->
     <InstallExecuteSequence>
-      <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed AND NOT REMOVE</Custom>
+      <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed AND NOT REMOVE AND NOT WIX_UPGRADE_DETECTED</Custom>
     </InstallExecuteSequence>
 
     <Feature Id="Complete" Level="1">

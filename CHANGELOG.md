@@ -3,6 +3,27 @@
 Todas las novedades relevantes de cada versión. Formato basado en
 [Keep a Changelog](https://keepachangelog.com/es-ES/); versionado SemVer.
 
+## v0.4.1 — 2026-07-18
+
+### Agregado
+- **"Buscar actualizaciones" en el menú** ☰/click derecho (antes solo
+  estaba dentro de ⚙); muestra "Actualizar a vX.Y.Z…" si ya hay una
+  versión conocida.
+- **Aviso de versión nueva al abrir la app**: el primer chequeo tras el
+  arranque muestra el diálogo de actualización (los chequeos periódicos
+  de cada 24 h siguen siendo discretos, solo el botón ⬆).
+- **Grosor del banner desde 5 px**: el mínimo bajó de 20 a 5, y la letra
+  de la cinta, el LED y los botones se escalan con el grosor elegido.
+
+### Corregido
+- "Actualizar ahora" del menú se confundía con la actualización de la
+  app: ahora se llama "Refrescar cotizaciones" (es/en/de).
+- **Windows: al actualizar quedaban dos banners**: el instalador y el
+  script de actualización relanzaban la app a la vez y la protección
+  anti-duplicados tenía una ventana de carrera. Ahora el instalador solo
+  auto-lanza en instalaciones nuevas y el lanzador espera a que el banner
+  existente termine de aparecer antes de decidir.
+
 ## v0.4.0 — 2026-07-18
 
 ### Agregado
