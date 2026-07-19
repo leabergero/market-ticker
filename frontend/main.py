@@ -20,7 +20,7 @@ from PyQt6.QtGui import (QFont, QColor, QPainter, QAction, QFontMetrics,
 BACKEND_URL = "http://127.0.0.1:5003"
 
 # Versión de la app: fuente ÚNICA de verdad (los build scripts la leen de acá)
-APP_VERSION = "0.4.2"
+APP_VERSION = "0.4.3"
 # Releases de GitHub contra los que se chequean actualizaciones
 UPDATE_REPO = "leabergero/market-ticker"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"
@@ -635,9 +635,11 @@ class TickerBanner(QWidget):
         QApplication.primaryScreen().availableGeometryChanged.connect(
             lambda _: self._place())
 
-        # Autostart viene activado por defecto: registrarlo en el SO en el
-        # primer arranque (el usuario lo desactiva desde ⚙ si no lo quiere).
-        if self.config.get("autostart") and not self._autostart_enabled():
+        # Autostart viene activado por defecto: registrarlo en el SO en cada
+        # arranque (idempotente; además reescribe artefactos viejos rotos,
+        # como el plist de macOS con la ruta sin comillas). El usuario lo
+        # desactiva desde ⚙ si no lo quiere.
+        if self.config.get("autostart"):
             try:
                 self._set_autostart(True)
             except Exception:
@@ -1677,7 +1679,9 @@ class TickerBanner(QWidget):
         else:
             script = app_dir / "run.sh"
         if script.exists():
-            return str(script)
+            # Siempre entre comillas: en macOS la ruta lleva espacios
+            # ("Market Ticker.app") y el plist la ejecuta con bash -c.
+            return f'"{script}"'
         return f'"{sys.executable}" "{Path(sys.argv[0]).resolve()}"'
 
     def _autostart_file(self):
