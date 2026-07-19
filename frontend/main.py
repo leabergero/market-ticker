@@ -20,7 +20,7 @@ from PyQt6.QtGui import (QFont, QColor, QPainter, QAction, QFontMetrics,
 BACKEND_URL = "http://127.0.0.1:5003"
 
 # Versión de la app: fuente ÚNICA de verdad (los build scripts la leen de acá)
-APP_VERSION = "0.4.1"
+APP_VERSION = "0.4.2"
 # Releases de GitHub contra los que se chequean actualizaciones
 UPDATE_REPO = "leabergero/market-ticker"
 UPDATE_API = f"https://api.github.com/repos/{UPDATE_REPO}/releases/latest"

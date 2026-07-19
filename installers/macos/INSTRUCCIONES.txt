@@ -3,7 +3,9 @@ MARKET TICKER — macOS
 
 INSTALAR
 --------
-1) Doble click en market-ticker-0.1.0.pkg y seguir el asistente.
+Requiere macOS 11 (Big Sur) o superior.
+
+1) Doble click en el .pkg y seguir el asistente.
    Si macOS lo bloquea por "desarrollador no identificado":
    click derecho sobre el .pkg → Abrir → Abrir
    (o Ajustes del Sistema → Privacidad y seguridad → "Abrir igualmente").

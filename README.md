@@ -25,7 +25,7 @@ Banner de cotizaciones en tiempo real, estilo cinta de bolsa: fino (32 px), sin 
 Descargá el instalador de tu sistema desde [Releases](../../releases):
 
 - **Windows**: `market-ticker-X.Y.Z.msi` — doble click; instala per-user (sin permisos de administrador), crea "Market Ticker" en el menú inicio y al terminar lanza solo la preparación de dependencias y la app (necesita internet)
-- **macOS**: `market-ticker-X.Y.Z.pkg` — instala "Market Ticker.app" en Aplicaciones y la abre al terminar; el primer arranque prepara las dependencias
+- **macOS**: `market-ticker-X.Y.Z.pkg` — instala "Market Ticker.app" en Aplicaciones y la abre al terminar; el primer arranque prepara las dependencias. Requiere macOS 11 (Big Sur) o superior; la app elige sola la versión de Qt compatible con tu sistema
 - **Ubuntu/Debian**: `sudo dpkg -i market-ticker_X.Y.Z_all.deb` — queda en el menú de aplicaciones
 
 El inicio automático con el sistema queda **activado por defecto** (se desactiva en ⚙). Las actualizaciones posteriores se ofrecen solas desde la app.
@@ -67,6 +67,8 @@ git clone https://github.com/leabergero/market-ticker.git
 cd market-ticker
 python3 -m venv venv && source venv/bin/activate
 pip install -r release/requirements.txt
+# En macOS 12 (Monterey) agregar: pip install "PyQt6<6.9" "PyQt6-Qt6<6.9"
+# En macOS 11 (Big Sur) agregar:  pip install "PyQt6<6.8" "PyQt6-Qt6<6.8"
 python backend/app.py &
 python frontend/main.py
 ```
