@@ -2,10 +2,15 @@
 """Empaqueta un directorio como archivo xar — el contenedor de los .pkg
 planos de macOS — sin necesitar el binario `xar` (no existe empaquetado
 para Linux moderno). Implementa solo lo que installer(8)/pkgutil leen:
-TOC XML comprimido con zlib, checksums SHA-1 y datos con encoding
-"application/x-gzip" (que en xar significa deflate zlib, no gzip real).
-Ojo con el TOC: <length> es el tamaño comprimido en el heap y <size>
-el tamaño extraído — al revés de lo que sugieren los nombres.
+TOC XML comprimido con zlib, checksums SHA-1 y datos SIN transformar
+(encoding "application/octet-stream"). Los datos deben ir crudos en el
+heap: installd NO extrae Payload/Scripts vía la capa xar sino que le
+pasa a BOMCopier el .pkg + offset del heap esperando el cpio.gz tal
+cual — con los datos re-comprimidos en zlib la instalación falla con
+"cpio read error: bad file format" (pkgutil --expand y bsdtar sí
+decodifican el xar completo, por eso no lo detectaban).
+Ojo con el TOC: <length> es el tamaño en el heap y <size> el extraído
+(iguales sin transformación; con compresión, al revés de lo intuitivo).
 
 Uso: mkxar.py <directorio-origen> <salida.pkg>
 """
@@ -21,22 +26,22 @@ CKSUM_SIZE = 20  # SHA-1 del TOC comprimido, primer objeto del heap
 
 
 def _file_entry(fid, name, full, heap):
-    """Nodo <file> de un archivo regular; agrega sus datos zlib al heap."""
+    """Nodo <file> de un archivo regular; agrega sus datos crudos al heap."""
     with open(full, "rb") as f:
         data = f.read()
-    comp = zlib.compress(data, 9)
     offset = len(heap)
-    heap.extend(comp)
+    heap.extend(data)
     mode = "0755" if os.access(full, os.X_OK) else "0644"
+    sha = hashlib.sha1(data).hexdigest()
     return (
         f'<file id="{fid}"><name>{escape(name)}</name><type>file</type>'
         f"<mode>{mode}</mode><uid>0</uid><gid>0</gid>"
         f"<user>root</user><group>wheel</group>"
         f"<data><offset>{offset}</offset><size>{len(data)}</size>"
-        f"<length>{len(comp)}</length>"
-        f'<encoding style="application/x-gzip"/>'
-        f'<extracted-checksum style="sha1">{hashlib.sha1(data).hexdigest()}</extracted-checksum>'
-        f'<archived-checksum style="sha1">{hashlib.sha1(comp).hexdigest()}</archived-checksum>'
+        f"<length>{len(data)}</length>"
+        f'<encoding style="application/octet-stream"/>'
+        f'<extracted-checksum style="sha1">{sha}</extracted-checksum>'
+        f'<archived-checksum style="sha1">{sha}</archived-checksum>'
         f"</data></file>"
     )
 
