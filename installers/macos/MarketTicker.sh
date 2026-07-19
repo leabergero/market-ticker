@@ -26,11 +26,25 @@ if [ -z "$PY" ]; then
     exit 1
 fi
 
+# Qt tiene mínimo de macOS por versión (6.7→11, 6.8→12, 6.9→13): pinear
+# PyQt6 según el SO o el último wheel exige un macOS más nuevo y la app
+# muere con "Qt requires macOS N or later" (visto en Monterey con 6.9).
+OSMAJ="$(sw_vers -productVersion 2>/dev/null | cut -d. -f1)"
+QT_PIN=()
+case "$OSMAJ" in
+    11) QT_PIN=("PyQt6>=6.7,<6.8" "PyQt6-Qt6>=6.7,<6.8");;
+    12) QT_PIN=("PyQt6>=6.7,<6.9" "PyQt6-Qt6>=6.8,<6.9");;
+esac
+if [ -n "$OSMAJ" ] && [ "$OSMAJ" -lt 11 ] 2>/dev/null; then
+    osascript -e 'display alert "Market Ticker" message "Se necesita macOS 11 (Big Sur) o superior." as critical' >/dev/null 2>&1
+    exit 1
+fi
+
 if [ ! -x "$VENV/bin/python" ]; then
     osascript -e 'display notification "Instalando dependencias (solo la primera vez, puede tardar unos minutos)…" with title "Market Ticker"' >/dev/null 2>&1
     if ! { "$PY" -m venv "$VENV" \
            && "$VENV/bin/pip" install --quiet --upgrade pip \
-           && "$VENV/bin/pip" install --quiet -r "$RES/requirements.txt"; } >>"$SUP/ticker.log" 2>&1; then
+           && "$VENV/bin/pip" install --quiet -r "$RES/requirements.txt" "${QT_PIN[@]}"; } >>"$SUP/ticker.log" 2>&1; then
         rm -rf "$VENV"
         osascript -e 'display alert "Market Ticker" message "Falló la instalación de dependencias. Revisá tu conexión a internet y volvé a abrir la app." as critical' >/dev/null 2>&1
         exit 1
