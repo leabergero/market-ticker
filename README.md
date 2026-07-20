@@ -4,7 +4,7 @@
 
 Banner de cotizaciones en tiempo real, estilo cinta de bolsa: fino (32 px), sin marco, ancho completo de pantalla, siempre a la vista. Multiplataforma (Linux, Windows, macOS).
 
-![estado](https://img.shields.io/badge/estado-beta-orange) ![python](https://img.shields.io/badge/python-3.10+-blue)
+![estado](https://img.shields.io/badge/estado-producci%C3%B3n-brightgreen) ![python](https://img.shields.io/badge/python-3.10+-blue)
 
 ## Características
 
